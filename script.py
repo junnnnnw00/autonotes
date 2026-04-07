@@ -64,4 +64,9 @@ def explain_ppt(pdf_path, output_md="lecture_notes.md"):
 
 # 실행 (본인의 PDF 파일명으로 수정하세요)
 if __name__ == "__main__":
-    explain_ppt("lecture.pdf")
+    #explain_ppt("CSED226/numpy.pdf", "CSED226/numpy.md")
+    #explain_ppt("CSED226/pandasII.pdf", "CSED226/pandasII.md")
+    #explain_ppt("CSED226/kNN.pdf", "CSED226/kNN.md")
+    #explain_ppt("CSED226/diskANN.pdf", "CSED226/diskANN.md")
+    explain_ppt("CSED226/decisionTree.pdf", "CSED226/decisionTree.md")
+    
