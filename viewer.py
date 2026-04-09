@@ -103,6 +103,8 @@ HTML = r"""<!DOCTYPE html>
     justify-content: space-between;
     white-space: nowrap;
   }
+  .sidebar-actions { display: flex; gap: 2px; }
+  #filter-btn,
   #toggle-btn,
   #sidebar-open-btn {
     background: none;
@@ -114,7 +116,9 @@ HTML = r"""<!DOCTYPE html>
     border-radius: 6px;
     transition: color 0.16s ease, background 0.16s ease, border-color 0.16s ease;
   }
+  #filter-btn,
   #toggle-btn { padding: 3px 5px; }
+  #filter-btn.active { color: var(--accent); }
   #sidebar-open-btn {
     display: none;
     position: absolute;
@@ -126,6 +130,7 @@ HTML = r"""<!DOCTYPE html>
     border-color: var(--border);
     box-shadow: var(--shadow);
   }
+  #filter-btn:hover,
   #toggle-btn:hover,
   #sidebar-open-btn:hover {
     color: #d4d4d4;
@@ -183,6 +188,14 @@ HTML = r"""<!DOCTYPE html>
 
   #notes-pane {
     flex: 1;
+    min-width: 0;
+    display: flex;
+    overflow: hidden;
+    position: relative;
+  }
+
+  #notes-scroll {
+    flex: 1;
     overflow-y: auto;
     min-width: 0;
     background: linear-gradient(180deg, #1f2125 0%, #1b1d21 100%);
@@ -200,11 +213,7 @@ HTML = r"""<!DOCTYPE html>
     justify-content: space-between;
     gap: 12px;
     margin-bottom: 18px;
-    padding: 10px 14px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: rgba(255, 255, 255, 0.02);
-    color: var(--muted);
+    color: var(--muted-2);
     font-size: 12px;
   }
 
@@ -462,6 +471,114 @@ HTML = r"""<!DOCTYPE html>
   }
   .empty-note code { margin-top: 8px; }
 
+  /* TOC overlay (right-edge hover) */
+  #toc-trigger-strip {
+    position: absolute;
+    top: 0; right: 0;
+    width: 10px; height: 100%;
+    z-index: 50;
+    cursor: pointer;
+    background: linear-gradient(to left, rgba(86, 156, 214, 0.14), transparent);
+    opacity: 0;
+    transition: opacity 0.25s;
+  }
+  #notes-pane:hover #toc-trigger-strip { opacity: 1; }
+
+  #toc-sidebar {
+    position: absolute;
+    top: 0; right: 0;
+    width: 240px; height: 100%;
+    background: rgba(22, 24, 28, 0.97);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-left: 1px solid rgba(86, 156, 214, 0.18);
+    box-shadow: -6px 0 28px rgba(0, 0, 0, 0.45);
+    transform: translateX(100%);
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 45;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #toc-sidebar.visible { transform: translateX(0); }
+
+  .toc-hd {
+    padding: 12px 14px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted-2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    flex-shrink: 0;
+  }
+  #toc-list-container { padding: 6px 0 20px 0; overflow-y: auto; flex: 1; }
+  .toc-list { list-style: none; padding: 0; margin: 0; }
+  .toc-item > a {
+    display: block;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: var(--muted);
+    text-decoration: none;
+    border-left: 2px solid transparent;
+    transition: color 0.13s, border-color 0.13s, background 0.13s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.5;
+  }
+  .toc-item > a:hover { color: var(--text); border-left-color: var(--accent); background: var(--accent-soft); }
+  .toc-item > a.active { color: #fff; border-left-color: var(--accent); background: var(--accent-soft); }
+  .toc-item.toc-h1 > a { font-weight: 700; color: var(--accent-2); font-size: 11.5px; padding: 6px 10px 3px; }
+  .toc-item.toc-h2 > a { padding-left: 16px; }
+  .toc-item.toc-h3 > a { padding-left: 26px; font-size: 11.5px; color: var(--muted-2); }
+  .toc-item > a[data-pdf-page]::after {
+    content: ' ⟶';
+    font-size: 10px;
+    color: var(--accent);
+    opacity: 0.6;
+    margin-left: 2px;
+  }
+
+  /* Back to top */
+  #back-to-top {
+    display: none;
+    position: fixed;
+    bottom: 22px;
+    right: 22px;
+    width: 34px;
+    height: 34px;
+    background: var(--panel-3);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    color: var(--muted);
+    font-size: 15px;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    transition: background 0.15s, color 0.15s;
+    box-shadow: var(--shadow);
+  }
+  #back-to-top.visible { display: flex; }
+  #back-to-top:hover { background: var(--panel-4); color: var(--text); }
+
+  /* Refresh button */
+  .refresh-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    line-height: 1.5;
+    transition: background 0.15s, color 0.15s, transform 0.15s;
+    flex-shrink: 0;
+  }
+  .refresh-btn:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+  .refresh-btn.spinning { animation: spin 0.6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
   ::-webkit-scrollbar { width: 12px; height: 12px; }
   ::-webkit-scrollbar-thumb {
     background: #3b414a;
@@ -476,16 +593,19 @@ HTML = r"""<!DOCTYPE html>
 <div class="layout">
   <button id="sidebar-open-btn" onclick="toggleSidebar()">▶</button>
   <div id="sidebar">
-    <h2>파일 목록 <button id="toggle-btn" onclick="toggleSidebar()" title="사이드바 닫기">◀</button></h2>
+    <h2>파일 목록 <span class="sidebar-actions"><button id="filter-btn" onclick="toggleHideNoNotes()" title="노트 없는 파일 숨기기">⊘</button><button id="toggle-btn" onclick="toggleSidebar()" title="사이드바 닫기">◀</button></span></h2>
     <div id="file-list">불러오는 중...</div>
   </div>
   <div class="panes" id="panes">
     <div id="placeholder">← 왼쪽에서 파일을 선택하세요</div>
   </div>
 </div>
+<button id="back-to-top" title="맨 위로">↑</button>
 
 <script>
 let currentItem = null;
+let currentFile = null;
+let hideNoNotes = false;
 
 const md = window.markdownit({
   html: true,
@@ -511,6 +631,33 @@ if (typeof window.texmath !== 'undefined') {
       output: 'html'
     }
   });
+}
+
+function preprocessMarkdown(text) {
+  // 1. Bold fix: closing ** preceded by punctuation + followed by Korean = not right-flanking.
+  //    Insert U+200B before closing ** to break the punctuation adjacency.
+  const parts = text.split(/(```[\s\S]*?```|`[^`\n]+`)/g);
+  const boldFixed = parts.map((part, i) => {
+    if (i % 2 === 1) return part;
+    return part.replace(/([)}\]'"'"»›…，、。！？])\*\*([가-힣ㄱ-ㅣ])/g, '$1\u200b**$2');
+  }).join('');
+
+  // 2. Heading normalization:
+  //    - First H1 (document title) is kept as-is.
+  //    - Any subsequent H1 → demoted to H3 (section title within a slide).
+  //    - H2 that is NOT "## Slide N" → demoted to H3 (slide sub-title, not a new section).
+  //    Result: H1=doc title, H2=Slide N anchors, H3=everything else.
+  let firstH1Seen = false;
+  return boldFixed.split('\n').map(line => {
+    if (/^# [^#]/.test(line)) {
+      if (!firstH1Seen) { firstH1Seen = true; return line; }
+      return '### ' + line.slice(2);
+    }
+    if (/^## [^#]/.test(line) && !/^## Slide\s+\d+/.test(line)) {
+      return '### ' + line.slice(3);
+    }
+    return line;
+  }).join('\n');
 }
 
 function escapeHtml(text) {
@@ -644,7 +791,7 @@ md.renderer.rules.fence = function(tokens, idx) {
 };
 
 function renderMarkdown(markdown) {
-  const rawHtml = md.render(markdown);
+  const rawHtml = md.render(preprocessMarkdown(markdown));
   const safeHtml = window.DOMPurify.sanitize(rawHtml, {
     USE_PROFILES: { html: true },
     ADD_ATTR: ['target', 'rel', 'class', 'data-lang']
@@ -652,7 +799,89 @@ function renderMarkdown(markdown) {
   return safeHtml;
 }
 
+function buildToc(root) {
+  const container = document.getElementById('toc-list-container');
+  if (!container) return;
+
+  const body = root.querySelector('.markdown-body');
+  if (!body) { container.innerHTML = ''; return; }
+
+  const headings = Array.from(body.querySelectorAll('h1, h2, h3'));
+  if (headings.length < 2) { container.innerHTML = ''; return; }
+
+  // Assign stable IDs to headings
+  const seen = {};
+  headings.forEach(h => {
+    const base = h.textContent.trim()
+      .replace(/[^가-힣a-zA-Z0-9]/g, '-').replace(/-+/g, '-').slice(0, 48).toLowerCase();
+    const key = seen[base] = (seen[base] || 0) + 1;
+    h.id = key === 1 ? base : `${base}-${key}`;
+  });
+
+  const ul = document.createElement('ul');
+  ul.className = 'toc-list';
+
+  const scrollEl = document.getElementById('notes-scroll');
+  headings.forEach(h => {
+    const li = document.createElement('li');
+    li.className = `toc-item toc-${h.tagName.toLowerCase()}`;
+    const a = document.createElement('a');
+    const slideMatch = h.textContent.trim().match(/^Slide\s+(\d+)/i);
+    const pageNum = slideMatch ? parseInt(slideMatch[1], 10) : null;
+    a.textContent = h.textContent.trim();
+    if (pageNum !== null) a.dataset.pdfPage = pageNum;
+    a.href = `#${h.id}`;
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      if (scrollEl) {
+        const paneTop = scrollEl.getBoundingClientRect().top;
+        const headingTop = h.getBoundingClientRect().top;
+        scrollEl.scrollBy({ top: headingTop - paneTop - 12, behavior: 'smooth' });
+      } else {
+        h.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      // Sync PDF to corresponding page for Slide headings
+      if (pageNum !== null) {
+        const iframe = document.getElementById('pdf-frame');
+        if (iframe && currentFile) {
+          // Add timestamp to force full reload — hash-only changes are treated
+          // as same-document navigation and the PDF viewer ignores them.
+          const pdfBase = '/file?path=' + encodeURIComponent(currentFile.pdf);
+          iframe.src = pdfBase + '&_t=' + Date.now() + '#page=' + pageNum;
+        }
+      }
+    });
+    li.appendChild(a);
+    ul.appendChild(li);
+  });
+
+  container.innerHTML = '';
+  container.appendChild(ul);
+
+  // Scroll spy: highlight active TOC item as user scrolls
+  if (scrollEl) {
+    const links = Array.from(container.querySelectorAll('.toc-item > a'));
+    function updateActive() {
+      const scrollTop = scrollEl.scrollTop;
+      let active = null;
+      for (const h of headings) {
+        if (h.offsetTop - 48 <= scrollTop) active = h.id;
+        else break;
+      }
+      links.forEach(a => {
+        a.classList.toggle('active', a.getAttribute('href') === '#' + active);
+      });
+    }
+    scrollEl.removeEventListener('scroll', scrollEl._tocSpy);
+    scrollEl._tocSpy = updateActive;
+    scrollEl.addEventListener('scroll', updateActive);
+    updateActive();
+  }
+}
+
 function enhanceRenderedNotes(root) {
+  buildToc(root);
+
   root.querySelectorAll('a[href]').forEach(link => {
     const href = link.getAttribute('href') || '';
     if (/^https?:\/\//i.test(href)) {
@@ -735,6 +964,9 @@ async function loadFiles() {
     return;
   }
 
+  const savedPdf = localStorage.getItem('autonotes_last');
+  let autoOpen = null;
+
   for (const group of groups) {
     const g = document.createElement('div');
     g.className = 'course-group';
@@ -749,17 +981,54 @@ async function loadFiles() {
       item.className = 'file-item' + (f.has_notes ? '' : ' no-notes');
       item.textContent = f.stem;
       item.title = f.pdf;
+      if (!f.has_notes && hideNoNotes) item.style.display = 'none';
       item.addEventListener('click', () => openFile(f, item));
       g.appendChild(item);
+      if (savedPdf && f.pdf === savedPdf) autoOpen = { f, item };
     }
     list.appendChild(g);
   }
+
+  if (autoOpen) openFile(autoOpen.f, autoOpen.item);
+}
+
+function toggleHideNoNotes() {
+  hideNoNotes = !hideNoNotes;
+  document.getElementById('filter-btn').classList.toggle('active', hideNoNotes);
+  document.querySelectorAll('.file-item.no-notes').forEach(el => {
+    el.style.display = hideNoNotes ? 'none' : '';
+  });
+}
+
+async function renderNotesInto(f, paneEl) {
+  const res = await fetch('/file?path=' + encodeURIComponent(f.md) + '&raw=1');
+  const markdown = await res.text();
+  const rendered = renderMarkdown(markdown);
+
+  const scrollEl = paneEl.querySelector('#notes-scroll') || paneEl;
+  scrollEl.innerHTML = `
+    <div class="notes-shell">
+      <div class="notes-meta">
+        <span>${f.stem}.md</span>
+        <button class="refresh-btn" title="노트 새로고침">↻</button>
+      </div>
+      <article class="markdown-body">${rendered}</article>
+    </div>
+  `;
+  scrollEl.querySelector('.refresh-btn').addEventListener('click', async function() {
+    this.classList.add('spinning');
+    await renderNotesInto(f, paneEl);
+  });
+  enhanceRenderedNotes(scrollEl);
+  scrollEl.scrollTop = 0;
 }
 
 async function openFile(f, item) {
   if (currentItem) currentItem.classList.remove('active');
   item.classList.add('active');
   currentItem = item;
+  currentFile = f;
+  localStorage.setItem('autonotes_last', f.pdf);
 
   const panes = document.getElementById('panes');
   const placeholder = document.getElementById('placeholder');
@@ -784,24 +1053,52 @@ async function openFile(f, item) {
     panes.appendChild(divider);
     panes.appendChild(notesPaneEl);
     setupDivider(divider, iframe, notesPaneEl);
+
+    // Restore saved pane ratio
+    const savedRatio = parseFloat(localStorage.getItem('autonotes_ratio'));
+    if (savedRatio) {
+      iframe.style.flex = 'none';
+      iframe.style.width = savedRatio + '%';
+      notesPaneEl.style.flex = 'none';
+      notesPaneEl.style.width = (100 - savedRatio - 0.4) + '%';
+    }
+
+    // Set up inner structure: full-width scroll area + overlay TOC
+    notesPaneEl.innerHTML = `
+      <div id="notes-scroll"></div>
+      <div id="toc-trigger-strip"></div>
+      <div id="toc-sidebar">
+        <div class="toc-hd">목차</div>
+        <div id="toc-list-container"></div>
+      </div>
+    `;
+
+    // TOC hover show/hide (with small delay to handle cursor gap)
+    let tocTimer = null;
+    const strip = notesPaneEl.querySelector('#toc-trigger-strip');
+    const tocEl = notesPaneEl.querySelector('#toc-sidebar');
+    function showToc() { clearTimeout(tocTimer); tocEl.classList.add('visible'); }
+    function hideToc() { tocTimer = setTimeout(() => tocEl.classList.remove('visible'), 220); }
+    strip.addEventListener('mouseenter', showToc);
+    strip.addEventListener('mouseleave', hideToc);
+    tocEl.addEventListener('mouseenter', showToc);
+    tocEl.addEventListener('mouseleave', hideToc);
+
+    // Back to top
+    const scrollEl = notesPaneEl.querySelector('#notes-scroll');
+    const backBtn = document.getElementById('back-to-top');
+    scrollEl.addEventListener('scroll', () => {
+      backBtn.classList.toggle('visible', scrollEl.scrollTop > 300);
+    });
+    backBtn.addEventListener('click', () => {
+      scrollEl.scrollTo({ top: 0, behavior: 'smooth' });
+    });
   }
 
   iframe.src = '/file?path=' + encodeURIComponent(f.pdf);
 
   if (f.has_notes) {
-    const res = await fetch('/file?path=' + encodeURIComponent(f.md) + '&raw=1');
-    const markdown = await res.text();
-    const rendered = renderMarkdown(markdown);
-    notesPaneEl.innerHTML = `
-      <div class="notes-shell">
-        <div class="notes-meta">
-          <span>${f.stem}.md</span>
-          <span>Markdown · 코드 하이라이트 · 수식 렌더링 · 자동 언어 감지</span>
-        </div>
-        <article class="markdown-body">${rendered}</article>
-      </div>
-    `;
-    enhanceRenderedNotes(notesPaneEl);
+    await renderNotesInto(f, notesPaneEl);
   } else {
     notesPaneEl.innerHTML = `
       <div class="notes-shell">
@@ -823,8 +1120,27 @@ function toggleSidebar() {
 
 function setupDivider(divider, iframe, notesPane) {
   let dragging = false;
+  let pdfHidden = false;
+
+  // Double-click: toggle PDF-hidden / full-notes mode
+  divider.addEventListener('dblclick', () => {
+    pdfHidden = !pdfHidden;
+    iframe.style.display = pdfHidden ? 'none' : '';
+    divider.style.display = pdfHidden ? 'none' : '';
+    if (!pdfHidden) {
+      const saved = parseFloat(localStorage.getItem('autonotes_ratio')) || 50;
+      iframe.style.flex = 'none';
+      iframe.style.width = saved + '%';
+      notesPane.style.flex = 'none';
+      notesPane.style.width = (100 - saved - 0.4) + '%';
+    } else {
+      notesPane.style.flex = '';
+      notesPane.style.width = '';
+    }
+  });
 
   divider.addEventListener('mousedown', e => {
+    if (e.detail >= 2) return; // ignore dblclick drag
     dragging = true;
     divider.classList.add('dragging');
     iframe.style.pointerEvents = 'none';
@@ -841,6 +1157,7 @@ function setupDivider(divider, iframe, notesPane) {
     iframe.style.width = clamp + '%';
     notesPane.style.flex = 'none';
     notesPane.style.width = (100 - clamp - 0.4) + '%';
+    localStorage.setItem('autonotes_ratio', clamp);
   });
 
   document.addEventListener('mouseup', () => {
