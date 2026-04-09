@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import argparse
 import fitz  # PyMuPDF
@@ -77,48 +78,88 @@ def build_prompt(course_context: str) -> str:
 
 첨부된 슬라이드를 분석하여 다음 형식으로 마크다운 노트를 작성해 주세요:
 - **핵심 개념**: 슬라이드의 주요 개념을 명확하게 설명
-- **코드/수식 해설**: 코드나 수식이 있다면 한 줄씩 상세히 풀이 (코드 블록 사용)
+- **코드/수식 해설**: 코드는 코드 블록(```)을 사용하고, 수식은 반드시 LaTeX 문법($ 또는 $$)을 사용하여 작성해 주세요 (수식을 코드 블록 안에 넣지 마세요).
 - **구체적 예시**: 실제 동작 예시나 실생활 비유를 통해 이해를 도움
 - **시험 포인트**: 시험에 나올 만한 핵심 내용을 ⭐ 표시와 함께 강조
 
 불필요한 인사말 없이 바로 본론만 작성해 주세요."""
 
-def explain_pdf(pdf_path: Path, output_md: Path, delay: float = 2.0):
+def _parse_md_sections(md_text: str) -> tuple[str, dict[int, str]]:
+    """md 파일을 (헤더, {슬라이드번호: 섹션텍스트}) 로 파싱합니다.
+    기존에 생성된 md 파일 형식과 호환됩니다."""
+    # "## Slide N" 앞에서 분리 (줄 시작 기준)
+    parts = re.split(r'\n(?=## Slide \d+\n)', md_text)
+    header = parts[0] + "\n"  # 첫 번째 슬라이드 전 헤더
+    sections: dict[int, str] = {}
+    for part in parts[1:]:
+        m = re.match(r'## Slide (\d+)\n', part)
+        if m:
+            sections[int(m.group(1))] = part
+    return header, sections
+
+def find_failed_slides(output_md: Path) -> set[int]:
+    """기존 .md에서 오류가 발생했던 슬라이드 번호 집합을 반환합니다."""
+    if not output_md.exists():
+        return set()
+    _, sections = _parse_md_sections(output_md.read_text(encoding="utf-8"))
+    return {
+        num for num, text in sections.items()
+        if "*오류 발생으로 해설을 생성하지 못했습니다.*" in text
+        or "*빈 슬라이드이거나 응답을 생성할 수 없었습니다.*" in text
+    }
+
+def _process_slide(page, prompt: str, page_num: int, delay: float) -> str:
+    """슬라이드 한 장을 처리하고 마크다운 섹션 텍스트를 반환합니다."""
+    pix = page.get_pixmap(dpi=150)
+    img = Image.open(io.BytesIO(pix.tobytes()))
+    try:
+        response = model.generate_content([prompt, img])
+        if response.parts:
+            content = response.text
+        else:
+            print(f"  [경고] 슬라이드 {page_num}: 빈 응답 (finish_reason={response.candidates[0].finish_reason if response.candidates else 'unknown'})")
+            content = "*빈 슬라이드이거나 응답을 생성할 수 없었습니다.*"
+        time.sleep(delay)
+    except Exception as e:
+        print(f"  [오류] 슬라이드 {page_num}: {e}")
+        content = "*오류 발생으로 해설을 생성하지 못했습니다.*"
+    return f"## Slide {page_num}\n\n{content}\n\n---\n\n"
+
+def explain_pdf(pdf_path: Path, output_md: Path, delay: float = 2.0,
+                target_slides: set[int] | None = None):
     print(f"\n[{pdf_path}] 분석을 시작합니다...")
 
     doc = fitz.open(str(pdf_path))
     course_context = get_course_context(pdf_path)
     prompt = build_prompt(course_context)
 
-    course_code = next(
-        (p.upper() for p in pdf_path.parts if p.upper() in COURSE_CONTEXTS),
-        "CS"
-    )
-    topic = pdf_path.stem
-
-    full_notes = f"# {course_code} - {topic} 상세 해설 노트\n\n"
-    full_notes += f"> 이 노트는 Gemini 2.5 Flash를 이용해 자동 생성되었습니다.\n\n---\n\n"
-
-    for page_num in range(len(doc)):
-        print(f"  -> 슬라이드 {page_num + 1}/{len(doc)} 처리 중...")
-
-        page = doc.load_page(page_num)
-        pix = page.get_pixmap(dpi=150)
-        img = Image.open(io.BytesIO(pix.tobytes()))
-
-        try:
-            response = model.generate_content([prompt, img])
-            full_notes += f"## Slide {page_num + 1}\n\n"
-            full_notes += response.text + "\n\n---\n\n"
-            time.sleep(delay)
-        except Exception as e:
-            print(f"  [오류] 슬라이드 {page_num + 1}: {e}")
-            full_notes += f"## Slide {page_num + 1}\n\n*오류 발생으로 해설을 생성하지 못했습니다.*\n\n---\n\n"
+    if target_slides:
+        # 특정 슬라이드만 재처리: 기존 .md 로드 후 해당 섹션만 교체
+        if not output_md.exists():
+            print(f"  [오류] '{output_md}'이 없습니다. 먼저 전체 처리를 실행하세요.")
+            return
+        print(f"  슬라이드 {sorted(target_slides)} 재처리 중...")
+        header, sections = _parse_md_sections(output_md.read_text(encoding="utf-8"))
+        for num in sorted(target_slides):
+            if num < 1 or num > len(doc):
+                print(f"  [경고] 슬라이드 {num}은 범위를 벗어납니다 (총 {len(doc)}장). 건너뜁니다.")
+                continue
+            print(f"  -> 슬라이드 {num}/{len(doc)} 재처리 중...")
+            sections[num] = _process_slide(doc.load_page(num - 1), prompt, num, delay)
+        full_notes = header + "".join(sections[n] for n in sorted(sections))
+    else:
+        # 전체 처리
+        course_code = next(
+            (p.upper() for p in pdf_path.parts if p.upper() in COURSE_CONTEXTS), "CS"
+        )
+        full_notes = f"# {course_code} - {pdf_path.stem} 상세 해설 노트\n\n"
+        full_notes += f"> 이 노트는 Gemini 2.5 Flash를 이용해 자동 생성되었습니다.\n\n---\n\n"
+        for page_num in range(len(doc)):
+            print(f"  -> 슬라이드 {page_num + 1}/{len(doc)} 처리 중...")
+            full_notes += _process_slide(doc.load_page(page_num), prompt, page_num + 1, delay)
 
     output_md.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_md, "w", encoding="utf-8") as f:
-        f.write(full_notes)
-
+    output_md.write_text(full_notes, encoding="utf-8")
     print(f"  완료 -> [{output_md}]")
 
 def collect_pdfs(targets: list[str]) -> list[tuple[Path, Path]]:
@@ -149,6 +190,8 @@ def main():
   python script.py CSED226/numpy.pdf CSED226/pandas.pdf  # 여러 파일 처리
   python script.py CSED226/numpy.pdf -o notes/numpy_note.md  # 출력 경로 지정
   python script.py CSED226/ --delay 3          # API 호출 간격 3초로 설정
+  python script.py CSED226/numpy.pdf --retry   # 오류 슬라이드 자동 감지 후 재처리
+  python script.py CSED226/numpy.pdf --slides 3,7,12  # 특정 슬라이드만 재처리
         """
     )
     parser.add_argument(
@@ -166,6 +209,15 @@ def main():
         default=2.0,
         help="슬라이드 처리 간 대기 시간(초), 기본값: 2.0"
     )
+    parser.add_argument(
+        "--retry",
+        action="store_true",
+        help="기존 .md에서 오류가 발생한 슬라이드를 자동으로 감지해 재처리"
+    )
+    parser.add_argument(
+        "--slides",
+        help="재처리할 슬라이드 번호 (쉼표 구분, 예: 3,7,12)"
+    )
 
     args = parser.parse_args()
 
@@ -181,9 +233,26 @@ def main():
             sys.exit(1)
         pairs = [(pairs[0][0], Path(args.output))]
 
+    # 재처리 슬라이드 결정
+    manual_slides: set[int] = set()
+    if args.slides:
+        try:
+            manual_slides = {int(s.strip()) for s in args.slides.split(",")}
+        except ValueError:
+            print("[오류] --slides 인자는 쉼표로 구분된 숫자여야 합니다. 예: 3,7,12")
+            sys.exit(1)
+
     print(f"총 {len(pairs)}개 파일을 처리합니다.")
     for pdf_path, output_md in pairs:
-        explain_pdf(pdf_path, output_md, delay=args.delay)
+        target_slides: set[int] | None = None
+        if args.retry or manual_slides:
+            target_slides = manual_slides.copy()
+            if args.retry:
+                failed = find_failed_slides(output_md)
+                if failed:
+                    print(f"  오류 슬라이드 감지: {sorted(failed)}")
+                target_slides |= failed
+        explain_pdf(pdf_path, output_md, delay=args.delay, target_slides=target_slides or None)
 
     print("\n모든 작업이 완료되었습니다!")
 
