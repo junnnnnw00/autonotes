@@ -396,12 +396,15 @@ HTML = r"""<!DOCTYPE html>
     line-height: 1.65;
   }
 
-  .markdown-body table {
-    width: 100%;
-    border-collapse: collapse;
-    border-spacing: 0;
+  .table-wrap {
     display: block;
     overflow-x: auto;
+    width: 100%;
+  }
+  .markdown-body table {
+    width: auto;
+    border-collapse: collapse;
+    border-spacing: 0;
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 12px;
@@ -515,6 +518,11 @@ HTML = r"""<!DOCTYPE html>
   body.notes-light .notes-meta { color: #57606a; }
   body.notes-light .toc-hd { color: #57606a; }
   body.notes-light #notes-scroll .footnotes { color: #57606a; }
+  body.notes-light .code-block { border-color: rgba(0,0,0,0.12); }
+  body.notes-light .code-header { border-bottom-color: rgba(0,0,0,0.1); }
+  body.notes-light .copy-btn { border-color: rgba(0,0,0,0.15); background: rgba(0,0,0,0.05); color: #24292f; }
+  body.notes-light .copy-btn:hover { background: rgba(0,0,0,0.1); }
+  body.notes-light .markdown-body pre code { color: #c9d1d9; }
 
   /* PDF dark mode */
   iframe.pdf-dark { filter: invert(1) hue-rotate(180deg); }

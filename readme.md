@@ -1,11 +1,13 @@
 # 📒 AUTONOTES
 
 POSTECH CSED 과목 강의 슬라이드(PDF)를 **Gemini 2.5 Flash**로 페이지별 자동 해설하는 도구입니다.
+
 > 🌐 **온라인 뷰어**: [junnnnnw00.github.io/autonotes](https://junnnnnw00.github.io/autonotes/)
 
 - 강의자료 저작권 등의 이슈로 외부 유출은 자제 부탁드립니다.
+- 새로운 노트를 추가하여 풀 리퀘스트 넣거나, 다른 과 과목에 맞게 포크하는 것을 적극 권장합니다.
 
-- 새로운 노트를 추가하여 풀 리퀘스트 넣거나 다른 과 과목에 맞추어서 포크하시는걸 적극 관장합니다!
+---
 
 ## ⚙️ 설치
 
@@ -16,40 +18,59 @@ pip install -r requirements.txt
 ```
 
 `.env` 파일에 Gemini API 키를 설정합니다.
-```
+
+```env
 GEMINI_API_KEY=YOUR_API_KEY_HERE
 ```
+
+---
 
 ## 🚀 노트 생성 (`script.py`)
 
 ```bash
 # 단일 파일
 python script.py CSED226/numpy.pdf
-# → CSED226/numpy.md 생성
 
 # 디렉토리 내 PDF 전체
 python script.py CSED226/
 
-# 여러 파일 한 번에
+# 여러 파일
 python script.py CSED226/numpy.pdf CSED226/pandas.pdf
 
-# 출력 경로 지정
+# 출력 경로 지정 (단일 파일 시에만)
 python script.py CSED226/numpy.pdf -o notes/numpy_note.md
-
-# API 호출 간격 조정 (Rate Limit 방지)
-python script.py CSED226/ --delay 3
-
-# 오류 난 슬라이드 자동 감지 후 재처리
-python script.py CSED226/numpy.pdf --retry
-
-# 특정 슬라이드만 재처리
-python script.py CSED226/numpy.pdf --slides 3,7,12
-
-# 오류 슬라이드 + 추가 슬라이드 함께 재처리
-python script.py CSED226/numpy.pdf --retry --slides 12
 ```
 
 디렉토리 이름에 과목 코드(예: `CSED226/`)가 포함되면 과목 특화 프롬프트가 자동 적용됩니다.
+
+### 옵션
+
+| 옵션 | 기본값 | 설명 |
+|------|--------|------|
+| `--delay N` | `2.0` | 슬라이드 처리 간 대기 시간(초), Rate Limit 방지 |
+| `--workers N` / `-j N` | `1` | PDF 파일 단위 병렬 처리 워커 수 |
+| `--retry` | — | 기존 .md에서 오류 슬라이드를 자동 감지해 재처리 |
+| `--slides 3,7,12` | — | 특정 슬라이드만 재처리 |
+| `--save-warning-log` | — | MuPDF 경고를 `.mupdf_warnings.log` 파일로 저장 |
+| `--show-mupdf-messages` | — | MuPDF 내부 경고/오류를 콘솔에 표시 |
+
+### 사용 예시
+
+```bash
+# 폴더 전체를 3개 워커로 병렬 처리
+python script.py CSED226/ -j 3
+
+# 오류 슬라이드 재처리 (병렬)
+python script.py CSED226/ --retry -j 3
+
+# 특정 슬라이드 + 오류 슬라이드 함께 재처리
+python script.py CSED226/numpy.pdf --retry --slides 12
+
+# API 호출 간격 늘리기
+python script.py CSED226/ --delay 3
+```
+
+---
 
 ## 👀 뷰어 (`viewer.py`)
 
@@ -62,34 +83,36 @@ python viewer.py CSED226  # 특정 폴더 지정
 
 | 기능 | 설명 |
 |------|------|
-| 파일 탐색 | 왼쪽 사이드바에서 파일 클릭 → PDF(왼쪽) + 노트(오른쪽) 동시 표시 |
+| 파일 탐색 | 왼쪽 사이드바에서 클릭 → PDF(왼쪽) + 노트(오른쪽) 동시 표시 |
 | 패널 크기 조절 | 가운데 구분선 드래그 / 더블클릭으로 노트 전체화면 |
 | 사이드바 | `◀/▶` 버튼으로 열고 닫기, `⊘` 버튼으로 노트 없는 파일 숨기기 |
 | 목차(TOC) | 오른쪽 가장자리에 마우스 올리면 목차 오버레이 표시, 스크롤 위치 자동 하이라이트 |
 | PDF↔노트 동기화 | PDF 페이지 이동 시 해당 Slide 섹션으로 노트 자동 스크롤 (⇄ 버튼으로 토글) |
-| 목차→PDF 이동 | TOC에서 `Slide N` 항목 클릭 시 PDF도 해당 페이지로 이동 |
 | 라이트/다크 모드 | `☀/☾` 버튼으로 노트 라이트모드 + PDF 다크모드 동시 전환, 설정 저장됨 |
-| 고정 툴바 | 동기화·테마·새로고침 버튼이 스크롤해도 상단에 고정 |
 | 마지막 파일 복원 | 다음 실행 시 마지막으로 열었던 파일 자동 복원 |
 
 ### 온라인 뷰어 (GitHub Pages)
 
-매 `main` 브랜치 push마다 GitHub Actions가 자동으로 정적 사이트를 빌드합니다.  
-수동으로 빌드하려면:
+`main` 브랜치에 push하면 GitHub Actions가 자동으로 정적 사이트를 빌드합니다.
+수동 빌드:
 
 ```bash
 python build_static.py
 # → index.html, pdfview.html, files.json 생성
 ```
 
+---
+
 ## 📝 생성 노트 형식
 
 각 슬라이드마다 다음 항목이 자동으로 포함됩니다.
 
 - **핵심 개념** 설명
-- **코드/수식 해설** (코드 블록 포함)
+- **코드/수식 해설** (코드 블록 + LaTeX 수식)
 - **구체적 예시** (실생활 비유)
 - **시험 포인트** (⭐ 표시)
+
+---
 
 ## 📚 지원 과목
 

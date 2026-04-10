@@ -1,13 +1,21 @@
 import os
+
+# PyMuPDF 메시지 출력 경로는 fitz import 전에 설정해야 합니다.
+# 기본값은 /dev/null로 보내 콘솔에 MuPDF 내부 경고가 찍히지 않게 합니다.
+os.environ.setdefault("PYMUPDF_MESSAGE", f"path:{os.devnull}")
+
 import re
 import sys
 import argparse
-import fitz  # PyMuPDF
-import google.generativeai as genai
-from PIL import Image
 import io
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+
+import fitz  # PyMuPDF
+from google import genai
+from PIL import Image
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -16,8 +24,10 @@ api_key = os.getenv("GEMINI_API_KEY")
 if not api_key:
     raise ValueError("API 키를 찾을 수 없습니다. .env 파일에 GEMINI_API_KEY를 설정해 주세요.")
 
-genai.configure(api_key=api_key)
-model = genai.GenerativeModel('gemini-2.5-flash')
+client = genai.Client(api_key=api_key)
+MODEL_ID = "gemini-2.5-flash"
+
+_mupdf_lock = threading.Lock()
 
 # POSTECH 컴퓨터공학과(CSE) CSED 과목별 특화 프롬프트 컨텍스트
 # 출처: https://cse.postech.ac.kr/csepostech/admissions/under-subjects.do
@@ -65,12 +75,20 @@ COURSE_CONTEXTS = {
     "CSED451": "이 슬라이드는 컴퓨터그래픽스 (CSED451) 강의 자료입니다. 렌더링 파이프라인, 래스터화, 광선 추적, 변환 행렬, 셰이더, OpenGL/WebGL 등이 주로 다뤄집니다.",
 }
 
+
+def configure_pymupdf(show_messages: bool = False) -> None:
+    """PyMuPDF / MuPDF 내부 메시지 표시 여부를 설정합니다."""
+    fitz.TOOLS.mupdf_display_errors(show_messages)
+    fitz.TOOLS.mupdf_display_warnings(show_messages)
+
+
 def get_course_context(pdf_path: Path) -> str:
     """경로에서 과목 코드를 감지하고 해당 컨텍스트를 반환합니다."""
     for part in pdf_path.parts:
         if part.upper() in COURSE_CONTEXTS:
             return COURSE_CONTEXTS[part.upper()]
     return "이 슬라이드는 컴퓨터공학 전공 강의 자료입니다."
+
 
 def build_prompt(course_context: str) -> str:
     return f"""당신은 POSTECH 컴퓨터공학과 전공 튜터입니다.
@@ -84,90 +102,152 @@ def build_prompt(course_context: str) -> str:
 
 불필요한 인사말 없이 바로 본론만 작성해 주세요."""
 
+
 def _parse_md_sections(md_text: str) -> tuple[str, dict[int, str]]:
     """md 파일을 (헤더, {슬라이드번호: 섹션텍스트}) 로 파싱합니다.
     기존에 생성된 md 파일 형식과 호환됩니다."""
-    # "## Slide N" 앞에서 분리 (줄 시작 기준)
-    parts = re.split(r'\n(?=## Slide \d+\n)', md_text)
-    header = parts[0] + "\n"  # 첫 번째 슬라이드 전 헤더
+    parts = re.split(r"\n(?=## Slide \d+\n)", md_text)
+    header = parts[0] + "\n"
     sections: dict[int, str] = {}
     for part in parts[1:]:
-        m = re.match(r'## Slide (\d+)\n', part)
+        m = re.match(r"## Slide (\d+)\n", part)
         if m:
             sections[int(m.group(1))] = part
     return header, sections
+
 
 def find_failed_slides(output_md: Path) -> set[int]:
     """기존 .md에서 오류가 발생했던 슬라이드 번호 집합을 반환합니다."""
     if not output_md.exists():
         return set()
+
     _, sections = _parse_md_sections(output_md.read_text(encoding="utf-8"))
     return {
-        num for num, text in sections.items()
+        num
+        for num, text in sections.items()
         if "*오류 발생으로 해설을 생성하지 못했습니다.*" in text
         or "*빈 슬라이드이거나 응답을 생성할 수 없었습니다.*" in text
     }
 
-def _process_slide(page, prompt: str, page_num: int, delay: float) -> str:
+
+def _extract_page_warning(page_num: int) -> str | None:
+    """현재까지 누적된 MuPDF warnings 중 마지막 경고를 가져옵니다."""
+    warnings_text = fitz.TOOLS.mupdf_warnings().strip()
+    if not warnings_text:
+        return None
+    return f"[페이지 {page_num}] {warnings_text}"
+
+
+def _process_slide(
+    page: fitz.Page,
+    prompt: str,
+    page_num: int,
+    delay: float,
+    warning_logs: list[str] | None = None,
+) -> str:
     """슬라이드 한 장을 처리하고 마크다운 섹션 텍스트를 반환합니다."""
-    pix = page.get_pixmap(dpi=150)
-    img = Image.open(io.BytesIO(pix.tobytes()))
     try:
-        response = model.generate_content([prompt, img])
-        if response.parts:
+        with _mupdf_lock:
+            fitz.TOOLS.reset_mupdf_warnings()
+            pix = page.get_pixmap(dpi=150)
+            warning = _extract_page_warning(page_num)
+
+        if warning and warning_logs is not None:
+            warning_logs.append(warning)
+
+        img = Image.open(io.BytesIO(pix.tobytes("png")))
+        response = client.models.generate_content(model=MODEL_ID, contents=[prompt, img])
+
+        if response.text:
             content = response.text
         else:
-            print(f"  [경고] 슬라이드 {page_num}: 빈 응답 (finish_reason={response.candidates[0].finish_reason if response.candidates else 'unknown'})")
+            finish_reason = "unknown"
+            if response.candidates:
+                finish_reason = str(response.candidates[0].finish_reason)
+            print(f"  [경고] 슬라이드 {page_num}: 빈 응답 (finish_reason={finish_reason})")
             content = "*빈 슬라이드이거나 응답을 생성할 수 없었습니다.*"
+
         time.sleep(delay)
     except Exception as e:
         print(f"  [오류] 슬라이드 {page_num}: {e}")
         content = "*오류 발생으로 해설을 생성하지 못했습니다.*"
+
     return f"## Slide {page_num}\n\n{content}\n\n---\n\n"
 
-def explain_pdf(pdf_path: Path, output_md: Path, delay: float = 2.0,
-                target_slides: set[int] | None = None):
-    print(f"\n[{pdf_path}] 분석을 시작합니다...")
 
-    doc = fitz.open(str(pdf_path))
+def explain_pdf(
+    pdf_path: Path,
+    output_md: Path,
+    delay: float = 2.0,
+    target_slides: set[int] | None = None,
+    save_warning_log: bool = False,
+    label: str = "",
+):
+    tag = f"[{label or pdf_path.name}]"
+    print(f"\n{tag} 분석을 시작합니다... ({pdf_path})")
+
+    warning_logs: list[str] = []
     course_context = get_course_context(pdf_path)
     prompt = build_prompt(course_context)
 
-    if target_slides:
-        # 특정 슬라이드만 재처리: 기존 .md 로드 후 해당 섹션만 교체
-        if not output_md.exists():
-            print(f"  [오류] '{output_md}'이 없습니다. 먼저 전체 처리를 실행하세요.")
-            return
-        print(f"  슬라이드 {sorted(target_slides)} 재처리 중...")
-        header, sections = _parse_md_sections(output_md.read_text(encoding="utf-8"))
-        for num in sorted(target_slides):
-            if num < 1 or num > len(doc):
-                print(f"  [경고] 슬라이드 {num}은 범위를 벗어납니다 (총 {len(doc)}장). 건너뜁니다.")
-                continue
-            print(f"  -> 슬라이드 {num}/{len(doc)} 재처리 중...")
-            sections[num] = _process_slide(doc.load_page(num - 1), prompt, num, delay)
-        full_notes = header + "".join(sections[n] for n in sorted(sections))
-    else:
-        # 전체 처리
-        course_code = next(
-            (p.upper() for p in pdf_path.parts if p.upper() in COURSE_CONTEXTS), "CS"
-        )
-        full_notes = f"# {course_code} - {pdf_path.stem} 상세 해설 노트\n\n"
-        full_notes += f"> 이 노트는 Gemini 2.5 Flash를 이용해 자동 생성되었습니다.\n\n---\n\n"
-        for page_num in range(len(doc)):
-            print(f"  -> 슬라이드 {page_num + 1}/{len(doc)} 처리 중...")
-            full_notes += _process_slide(doc.load_page(page_num), prompt, page_num + 1, delay)
+    with fitz.open(str(pdf_path)) as doc:
+        if target_slides:
+            if not output_md.exists():
+                print(f"{tag} [오류] '{output_md}'이 없습니다. 먼저 전체 처리를 실행하세요.")
+                return
+
+            print(f"{tag} 슬라이드 {sorted(target_slides)} 재처리 중...")
+            header, sections = _parse_md_sections(output_md.read_text(encoding="utf-8"))
+
+            for num in sorted(target_slides):
+                if num < 1 or num > len(doc):
+                    print(f"{tag} [경고] 슬라이드 {num}은 범위를 벗어납니다 (총 {len(doc)}장). 건너뜁니다.")
+                    continue
+
+                print(f"{tag} -> 슬라이드 {num}/{len(doc)} 재처리 중...")
+                sections[num] = _process_slide(
+                    doc.load_page(num - 1),
+                    prompt,
+                    num,
+                    delay,
+                    warning_logs,
+                )
+
+            full_notes = header + "".join(sections[n] for n in sorted(sections))
+        else:
+            course_code = next(
+                (p.upper() for p in pdf_path.parts if p.upper() in COURSE_CONTEXTS),
+                "CS",
+            )
+            full_notes = f"# {course_code} - {pdf_path.stem} 상세 해설 노트\n\n"
+            full_notes += "> 이 노트는 Gemini 2.5 Flash를 이용해 자동 생성되었습니다.\n\n---\n\n"
+
+            for page_num in range(len(doc)):
+                print(f"{tag} -> 슬라이드 {page_num + 1}/{len(doc)} 처리 중...")
+                full_notes += _process_slide(
+                    doc.load_page(page_num),
+                    prompt,
+                    page_num + 1,
+                    delay,
+                    warning_logs,
+                )
 
     output_md.parent.mkdir(parents=True, exist_ok=True)
     output_md.write_text(full_notes, encoding="utf-8")
-    print(f"  완료 -> [{output_md}]")
+    print(f"{tag} 완료 -> [{output_md}]")
+
+    if save_warning_log and warning_logs:
+        warning_path = output_md.with_suffix(".mupdf_warnings.log")
+        warning_path.write_text("\n\n".join(warning_logs), encoding="utf-8")
+        print(f"{tag} MuPDF 경고 로그 저장 -> [{warning_path}]")
+
 
 def collect_pdfs(targets: list[str]) -> list[tuple[Path, Path]]:
     """
     타겟 경로 목록을 받아 (pdf_path, output_md_path) 쌍의 리스트를 반환합니다.
     타겟이 디렉토리면 그 안의 모든 PDF를, 파일이면 그 파일 하나를 처리합니다.
     """
-    pairs = []
+    pairs: list[tuple[Path, Path]] = []
     for target in targets:
         p = Path(target)
         if p.is_dir():
@@ -179,50 +259,72 @@ def collect_pdfs(targets: list[str]) -> list[tuple[Path, Path]]:
             print(f"[경고] '{target}'은 PDF 파일이나 디렉토리가 아닙니다. 건너뜁니다.")
     return pairs
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="PDF 강의 슬라이드를 Gemini AI로 자동 해설하여 마크다운 노트를 생성합니다.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 사용 예시:
-  python script.py CSED226/numpy.pdf           # 단일 파일 처리 (numpy.md 생성)
-  python script.py CSED226/                    # 디렉토리 내 모든 PDF 처리
-  python script.py CSED226/numpy.pdf CSED226/pandas.pdf  # 여러 파일 처리
-  python script.py CSED226/numpy.pdf -o notes/numpy_note.md  # 출력 경로 지정
-  python script.py CSED226/ --delay 3          # API 호출 간격 3초로 설정
-  python script.py CSED226/numpy.pdf --retry   # 오류 슬라이드 자동 감지 후 재처리
-  python script.py CSED226/numpy.pdf --slides 3,7,12  # 특정 슬라이드만 재처리
-        """
+  python script.py CSED226/numpy.pdf                    # 단일 파일 처리 (numpy.md 생성)
+  python script.py CSED226/                             # 디렉토리 내 모든 PDF 처리
+  python script.py CSED226/numpy.pdf CSED226/pandas.pdf # 여러 파일 처리
+  python script.py CSED226/numpy.pdf -o notes/numpy_note.md
+  python script.py CSED226/ --delay 3
+  python script.py CSED226/numpy.pdf --retry
+  python script.py CSED226/numpy.pdf --slides 3,7,12
+  python script.py CSED233/ --save-warning-log          # MuPDF 경고는 파일로만 저장
+  python script.py CSED233/ --show-mupdf-messages       # MuPDF 메시지를 콘솔에 표시
+        """,
     )
     parser.add_argument(
         "targets",
         nargs="+",
-        help="처리할 PDF 파일 또는 디렉토리 경로 (여러 개 지정 가능)"
+        help="처리할 PDF 파일 또는 디렉토리 경로 (여러 개 지정 가능)",
     )
     parser.add_argument(
-        "-o", "--output",
-        help="출력 마크다운 파일 경로 (단일 파일 처리 시에만 사용 가능)"
+        "-o",
+        "--output",
+        help="출력 마크다운 파일 경로 (단일 파일 처리 시에만 사용 가능)",
     )
     parser.add_argument(
         "--delay",
         type=float,
         default=2.0,
-        help="슬라이드 처리 간 대기 시간(초), 기본값: 2.0"
+        help="슬라이드 처리 간 대기 시간(초), 기본값: 2.0",
     )
     parser.add_argument(
         "--retry",
         action="store_true",
-        help="기존 .md에서 오류가 발생한 슬라이드를 자동으로 감지해 재처리"
+        help="기존 .md에서 오류가 발생한 슬라이드를 자동으로 감지해 재처리",
     )
     parser.add_argument(
         "--slides",
-        help="재처리할 슬라이드 번호 (쉼표 구분, 예: 3,7,12)"
+        help="재처리할 슬라이드 번호 (쉼표 구분, 예: 3,7,12)",
+    )
+    parser.add_argument(
+        "--show-mupdf-messages",
+        action="store_true",
+        help="기본적으로 숨기는 MuPDF 내부 경고/오류 메시지를 콘솔에 표시",
+    )
+    parser.add_argument(
+        "--save-warning-log",
+        action="store_true",
+        help="MuPDF 내부 경고를 콘솔 대신 .mupdf_warnings.log 파일로 저장",
+    )
+    parser.add_argument(
+        "--workers", "-j",
+        type=int,
+        default=1,
+        metavar="N",
+        help="PDF 파일을 병렬 처리할 워커 수 (기본값: 1)",
     )
 
     args = parser.parse_args()
 
-    pairs = collect_pdfs(args.targets)
+    configure_pymupdf(show_messages=args.show_mupdf_messages)
 
+    pairs = collect_pdfs(args.targets)
     if not pairs:
         print("처리할 PDF 파일이 없습니다.")
         sys.exit(1)
@@ -233,7 +335,6 @@ def main():
             sys.exit(1)
         pairs = [(pairs[0][0], Path(args.output))]
 
-    # 재처리 슬라이드 결정
     manual_slides: set[int] = set()
     if args.slides:
         try:
@@ -242,19 +343,48 @@ def main():
             print("[오류] --slides 인자는 쉼표로 구분된 숫자여야 합니다. 예: 3,7,12")
             sys.exit(1)
 
-    print(f"총 {len(pairs)}개 파일을 처리합니다.")
-    for pdf_path, output_md in pairs:
+    workers = min(args.workers, len(pairs))
+    print(f"총 {len(pairs)}개 파일을 처리합니다." + (f" (워커 {workers}개 병렬)" if workers > 1 else ""))
+
+    def process_one(idx_pair):
+        idx, (pdf_path, output_md) = idx_pair
+        label = f"{idx}/{len(pairs)} {pdf_path.name}"
         target_slides: set[int] | None = None
         if args.retry or manual_slides:
             target_slides = manual_slides.copy()
             if args.retry:
                 failed = find_failed_slides(output_md)
                 if failed:
-                    print(f"  오류 슬라이드 감지: {sorted(failed)}")
+                    print(f"[{label}] 오류 슬라이드 감지: {sorted(failed)}")
                 target_slides |= failed
-        explain_pdf(pdf_path, output_md, delay=args.delay, target_slides=target_slides or None)
+
+            if not target_slides:
+                print(f"[{label}] 재처리할 슬라이드 없음, 건너뜁니다.")
+                return
+
+        explain_pdf(
+            pdf_path,
+            output_md,
+            delay=args.delay,
+            target_slides=target_slides,
+            save_warning_log=args.save_warning_log,
+            label=label,
+        )
+
+    if workers <= 1:
+        for item in enumerate(pairs, 1):
+            process_one(item)
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {executor.submit(process_one, item): item for item in enumerate(pairs, 1)}
+            for future in as_completed(futures):
+                exc = future.exception()
+                if exc:
+                    _, (pdf_path, _) = futures[future]
+                    print(f"[오류] {pdf_path}: {exc}")
 
     print("\n모든 작업이 완료되었습니다!")
+
 
 if __name__ == "__main__":
     main()
