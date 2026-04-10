@@ -986,6 +986,12 @@ function buildToc(root) {
         const paneTop = scrollEl.getBoundingClientRect().top;
         const headingTop = h.getBoundingClientRect().top;
         scrollEl.scrollBy({ top: headingTop - paneTop - 12, behavior: 'smooth' });
+        // smooth scroll의 마지막 scroll 이벤트가 최종 위치에서 발생하지 않을 수 있으므로
+        // scrollend(또는 timeout fallback)로 TOC 하이라이트 재확인
+        clearTimeout(scrollEl._tocSpyTimer);
+        const confirmActive = () => { clearTimeout(scrollEl._tocSpyTimer); scrollEl._tocSpy?.(); };
+        scrollEl._tocSpyTimer = setTimeout(confirmActive, 500);
+        scrollEl.addEventListener('scrollend', confirmActive, { once: true });
       } else {
         h.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }

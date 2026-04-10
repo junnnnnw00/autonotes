@@ -970,6 +970,10 @@ function buildToc(root) {
         const paneTop = scrollEl.getBoundingClientRect().top;
         const headingTop = h.getBoundingClientRect().top;
         scrollEl.scrollBy({ top: headingTop - paneTop - 12, behavior: 'smooth' });
+        clearTimeout(scrollEl._tocSpyTimer);
+        const confirmActive = () => { clearTimeout(scrollEl._tocSpyTimer); scrollEl._tocSpy?.(); };
+        scrollEl._tocSpyTimer = setTimeout(confirmActive, 500);
+        scrollEl.addEventListener('scrollend', confirmActive, { once: true });
       } else {
         h.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
