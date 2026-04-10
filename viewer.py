@@ -653,111 +653,9 @@ HTML = r"""<!DOCTYPE html>
     background-clip: padding-box;
   }
   ::-webkit-scrollbar-track { background: transparent; }
-
-  /* ── Mobile ────────────────────────────────────────────────── */
-  @media (max-width: 768px) {
-    /* hide desktop scrollbars on mobile */
-    ::-webkit-scrollbar { width: 4px; height: 4px; }
-
-    /* sidebar becomes full-screen overlay drawer */
-    #sidebar {
-      position: fixed;
-      top: 0; left: 0;
-      width: 80vw !important;
-      max-width: 320px;
-      height: 100%;
-      z-index: 300;
-      transform: translateX(-100%);
-      transition: transform 0.24s cubic-bezier(0.4,0,0.2,1);
-      box-shadow: 4px 0 24px rgba(0,0,0,0.5);
-    }
-    #sidebar.mobile-open {
-      transform: translateX(0);
-    }
-    #sidebar.collapsed { width: 80vw !important; transform: translateX(-100%); }
-    #sidebar-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.5);
-      z-index: 299;
-    }
-    #sidebar-overlay.visible { display: block; }
-
-    /* hide desktop sidebar toggle buttons */
-    #sidebar-open-btn { display: none !important; }
-    #toggle-btn { display: none !important; }
-
-    /* panes stack vertically, mobile tab controls which is shown */
-    .panes {
-      flex-direction: column;
-    }
-    #pdf-frame {
-      flex: none !important;
-      width: 100% !important;
-      height: 100% !important;
-    }
-    #notes-pane {
-      flex: none !important;
-      width: 100% !important;
-      height: 100% !important;
-    }
-    #divider { display: none !important; }
-
-    /* mobile tab bar at bottom */
-    #mobile-tabs {
-      display: flex;
-      flex-shrink: 0;
-      background: var(--panel);
-      border-top: 1px solid var(--border);
-    }
-    .m-tab {
-      flex: 1;
-      padding: 10px 4px;
-      border: none;
-      background: none;
-      color: var(--muted);
-      font-size: 11px;
-      cursor: pointer;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 3px;
-      border-top: 2px solid transparent;
-      transition: color 0.15s, border-color 0.15s;
-      min-height: 52px;
-    }
-    .m-tab .m-tab-icon { font-size: 18px; line-height: 1; }
-    .m-tab.active { color: var(--accent); border-top-color: var(--accent); }
-
-    /* enlarge touch targets in toolbar */
-    .refresh-btn {
-      padding: 7px 11px;
-      font-size: 14px;
-    }
-    #notes-zoom-label { font-size: 12px; }
-
-    /* notes toolbar wrapping on small screens */
-    #notes-toolbar { flex-wrap: wrap; gap: 6px; padding: 6px 10px; }
-
-    /* placeholder text */
-    #placeholder { font-size: 13px; }
-
-    /* back to top: avoid tab bar */
-    #back-to-top { bottom: 68px; }
-
-    /* file items: bigger touch targets */
-    .file-item { padding: 12px 14px 12px 22px; font-size: 14px; }
-    .course-label { padding: 12px 14px 6px; }
-  }
-
-  /* desktop: hide mobile-only elements */
-  #mobile-tabs { display: none; }
-  #sidebar-overlay { display: none; }
 </style>
 </head>
 <body>
-<div id="sidebar-overlay" onclick="closeMobileSidebar()"></div>
 <div class="layout">
   <button id="sidebar-open-btn" onclick="toggleSidebar()">▶</button>
   <div id="sidebar">
@@ -765,19 +663,8 @@ HTML = r"""<!DOCTYPE html>
     <div id="file-list">불러오는 중...</div>
   </div>
   <div class="panes" id="panes">
-    <div id="placeholder">← 파일을 선택하세요</div>
+    <div id="placeholder">← 왼쪽에서 파일을 선택하세요</div>
   </div>
-</div>
-<div id="mobile-tabs">
-  <button class="m-tab active" id="m-tab-files" onclick="mobileTab('files')">
-    <span class="m-tab-icon">☰</span>파일
-  </button>
-  <button class="m-tab" id="m-tab-pdf" onclick="mobileTab('pdf')">
-    <span class="m-tab-icon">📄</span>PDF
-  </button>
-  <button class="m-tab" id="m-tab-notes" onclick="mobileTab('notes')">
-    <span class="m-tab-icon">📝</span>노트
-  </button>
 </div>
 <button id="back-to-top" title="맨 위로">↑</button>
 
@@ -1238,10 +1125,7 @@ async function loadFiles() {
       item.title = f.pdf;
       if (!f.has_notes) noNotesCount++;
       if (!f.has_notes && hideNoNotes) item.style.display = 'none';
-      item.addEventListener('click', async () => {
-        await openFile(f, item);
-        if (isMobile()) mobileTab(f.has_notes ? 'notes' : 'pdf');
-      });
+      item.addEventListener('click', () => openFile(f, item));
       g.appendChild(item);
       if (savedPdf && f.pdf === savedPdf) autoOpen = { f, item };
     }
@@ -1249,12 +1133,7 @@ async function loadFiles() {
   }
 
   updateFilterBadge();
-  if (autoOpen) {
-    await openFile(autoOpen.f, autoOpen.item);
-    if (isMobile()) mobileTab('notes');
-  } else if (isMobile()) {
-    mobileTab('files');
-  }
+  if (autoOpen) openFile(autoOpen.f, autoOpen.item);
 }
 
 function toggleHideNoNotes() {
@@ -1383,7 +1262,6 @@ async function openFile(f, item) {
   }
 
   iframe.src = '/pdfview?path=' + encodeURIComponent(f.pdf);
-  applyTheme();
 
   if (f.has_notes) {
     await renderNotesInto(f, notesPaneEl);
@@ -1400,7 +1278,6 @@ async function openFile(f, item) {
 }
 
 function toggleSidebar() {
-  if (isMobile()) { toggleSidebarMobile(); return; }
   const sidebar = document.getElementById('sidebar');
   const openBtn = document.getElementById('sidebar-open-btn');
   sidebar.classList.toggle('collapsed');
@@ -1428,104 +1305,33 @@ function setupDivider(divider, iframe, notesPane) {
     }
   });
 
-  function startDrag() {
+  divider.addEventListener('mousedown', e => {
+    if (e.detail >= 2) return; // ignore dblclick drag
     dragging = true;
     divider.classList.add('dragging');
     iframe.style.pointerEvents = 'none';
-  }
-  function doDrag(clientX) {
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', e => {
     if (!dragging) return;
     const panes = document.getElementById('panes');
     const rect = panes.getBoundingClientRect();
-    const ratio = ((clientX - rect.left) / rect.width) * 100;
+    const ratio = ((e.clientX - rect.left) / rect.width) * 100;
     const clamp = Math.min(Math.max(ratio, 20), 80);
     iframe.style.flex = 'none';
     iframe.style.width = clamp + '%';
     notesPane.style.flex = 'none';
     notesPane.style.width = (100 - clamp - 0.4) + '%';
     localStorage.setItem('autonotes_ratio', clamp);
-  }
-  function endDrag() {
+  });
+
+  document.addEventListener('mouseup', () => {
     if (!dragging) return;
     dragging = false;
     divider.classList.remove('dragging');
     iframe.style.pointerEvents = '';
-  }
-
-  divider.addEventListener('mousedown', e => {
-    if (e.detail >= 2) return;
-    startDrag(); e.preventDefault();
   });
-  document.addEventListener('mousemove', e => doDrag(e.clientX));
-  document.addEventListener('mouseup', endDrag);
-
-  // Touch support
-  divider.addEventListener('touchstart', e => {
-    startDrag(); e.preventDefault();
-  }, { passive: false });
-  document.addEventListener('touchmove', e => {
-    if (!dragging) return;
-    doDrag(e.touches[0].clientX); e.preventDefault();
-  }, { passive: false });
-  document.addEventListener('touchend', endDrag);
-}
-
-// ── Mobile helpers ──────────────────────────────────────────────────────────
-const isMobile = () => window.innerWidth <= 768;
-
-let mobileActiveTab = 'files'; // 'files' | 'pdf' | 'notes'
-
-function mobileTab(tab) {
-  mobileActiveTab = tab;
-  ['files','pdf','notes'].forEach(t => {
-    document.getElementById('m-tab-' + t)?.classList.toggle('active', t === tab);
-  });
-
-  const sidebar = document.getElementById('sidebar');
-  const pdfFrame = document.getElementById('pdf-frame');
-  const notesPane = document.getElementById('notes-pane');
-
-  if (tab === 'files') {
-    openMobileSidebar();
-    if (pdfFrame) pdfFrame.style.display = 'none';
-    if (notesPane) notesPane.style.display = 'none';
-  } else {
-    closeMobileSidebar();
-    if (pdfFrame) pdfFrame.style.display = tab === 'pdf' ? '' : 'none';
-    if (notesPane) notesPane.style.display = tab === 'notes' ? '' : 'none';
-  }
-}
-
-function openMobileSidebar() {
-  if (!isMobile()) return;
-  const sidebar = document.getElementById('sidebar');
-  const overlay = document.getElementById('sidebar-overlay');
-  sidebar.classList.add('mobile-open');
-  sidebar.classList.remove('collapsed');
-  overlay.classList.add('visible');
-}
-
-function closeMobileSidebar() {
-  const sidebar = document.getElementById('sidebar');
-  const overlay = document.getElementById('sidebar-overlay');
-  sidebar.classList.remove('mobile-open');
-  overlay.classList.remove('visible');
-}
-
-function toggleSidebarMobile() {
-  const sidebar = document.getElementById('sidebar');
-  if (sidebar.classList.contains('mobile-open')) {
-    closeMobileSidebar();
-  } else {
-    openMobileSidebar();
-  }
-}
-
-// After file opens on mobile: switch to PDF tab
-function afterOpenFileMobile() {
-  if (!isMobile()) return;
-  closeMobileSidebar();
-  mobileTab('pdf');
 }
 
 loadFiles();
