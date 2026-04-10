@@ -163,10 +163,15 @@ async function renderPage(pageNum) {
   const wrap = scroll.querySelector(`[data-page="${pageNum}"]`);
   if (!wrap) return;
   const page = await pdfDoc.getPage(pageNum);
-  const vp = page.getViewport({ scale: currentScale() });
+  const dpr = window.devicePixelRatio || 1;
+  const cssScale = currentScale();
+  const vp = page.getViewport({ scale: cssScale * dpr });
   const canvas = document.createElement('canvas');
-  canvas.width = vp.width; canvas.height = vp.height;
-  wrap.style.cssText = `width:${vp.width}px;height:${vp.height}px`;
+  canvas.width = vp.width;
+  canvas.height = vp.height;
+  canvas.style.width  = (vp.width  / dpr) + 'px';
+  canvas.style.height = (vp.height / dpr) + 'px';
+  wrap.style.cssText = `width:${vp.width / dpr}px;height:${vp.height / dpr}px`;
   wrap.replaceChildren(canvas);
   await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
 }
