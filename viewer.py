@@ -471,6 +471,57 @@ HTML = r"""<!DOCTYPE html>
   }
   .empty-note code { margin-top: 8px; }
 
+  /* Light mode for notes pane */
+  body.notes-light #notes-scroll { background: #f6f8fa; }
+  body.notes-light .markdown-body { color: #24292f; }
+  body.notes-light .markdown-body h1 { color: #0550ae; border-bottom-color: #d0d7de; }
+  body.notes-light .markdown-body h2 { color: #0969da; border-bottom-color: #d0d7de; }
+  body.notes-light .markdown-body h3 { color: #1a7f37; }
+  body.notes-light .markdown-body h4,
+  body.notes-light .markdown-body h5,
+  body.notes-light .markdown-body h6 { color: #24292f; }
+  body.notes-light .markdown-body strong { color: #000; }
+  body.notes-light .markdown-body em { color: #444; }
+  body.notes-light .markdown-body del { color: #666; }
+  body.notes-light .markdown-body a { color: #0969da; }
+  body.notes-light .markdown-body a:hover { border-bottom-color: rgba(9,105,218,0.5); }
+  body.notes-light .markdown-body blockquote {
+    color: #57606a; background: rgba(9,105,218,0.05); border-left-color: #0969da;
+  }
+  body.notes-light .markdown-body :not(pre) > code {
+    background: rgba(175,184,193,0.2); border-color: rgba(31,35,40,0.15); color: #953800;
+  }
+  body.notes-light .markdown-body table { background: #fff; border-color: #d0d7de; }
+  body.notes-light .markdown-body thead { background: rgba(0,0,0,0.04); }
+  body.notes-light .markdown-body th { color: #24292f; }
+  body.notes-light .markdown-body td { border-bottom-color: #e6e8eb; }
+  body.notes-light .markdown-body hr { border-top-color: #d0d7de; }
+  body.notes-light .markdown-body details { border-color: #d0d7de; background: rgba(0,0,0,0.02); }
+  body.notes-light .markdown-body summary { color: #24292f; }
+  body.notes-light .notes-meta { color: #57606a; }
+  body.notes-light .toc-hd { color: #57606a; }
+  body.notes-light #notes-scroll .footnotes { color: #57606a; }
+
+  /* PDF dark mode */
+  iframe.pdf-dark { filter: invert(1) hue-rotate(180deg); }
+
+  /* Filter count badge */
+  .filter-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 999px;
+    font-size: 9px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 4px;
+    margin-left: 2px;
+    line-height: 1;
+    pointer-events: none;
+  }
+
   /* TOC overlay (right-edge hover) */
   #toc-trigger-strip {
     position: absolute;
@@ -593,7 +644,7 @@ HTML = r"""<!DOCTYPE html>
 <div class="layout">
   <button id="sidebar-open-btn" onclick="toggleSidebar()">▶</button>
   <div id="sidebar">
-    <h2>파일 목록 <span class="sidebar-actions"><button id="filter-btn" onclick="toggleHideNoNotes()" title="노트 없는 파일 숨기기">⊘</button><button id="toggle-btn" onclick="toggleSidebar()" title="사이드바 닫기">◀</button></span></h2>
+    <h2>파일 목록 <span class="sidebar-actions"><button id="filter-btn" onclick="toggleHideNoNotes()" title="노트 없는 파일 숨기기">⊘<span class="filter-badge" id="filter-badge" style="display:none"></span></button><button id="toggle-btn" onclick="toggleSidebar()" title="사이드바 닫기">◀</button></span></h2>
     <div id="file-list">불러오는 중...</div>
   </div>
   <div class="panes" id="panes">
@@ -606,6 +657,12 @@ HTML = r"""<!DOCTYPE html>
 let currentItem = null;
 let currentFile = null;
 let hideNoNotes = false;
+let noNotesCount = 0;
+let notesLight = localStorage.getItem('autonotes_light') === '1';
+let pdfDark = localStorage.getItem('autonotes_pdfdark') === '1';
+let pdfSyncInterval = null;
+let pdfSyncSuppressUntil = 0;
+let currentHeadings = [];
 
 const md = window.markdownit({
   html: true,
@@ -799,6 +856,67 @@ function renderMarkdown(markdown) {
   return safeHtml;
 }
 
+function applyTheme() {
+  document.body.classList.toggle('notes-light', notesLight);
+  const iframe = document.getElementById('pdf-frame');
+  if (iframe) iframe.classList.toggle('pdf-dark', pdfDark);
+  const btn = document.querySelector('.theme-btn');
+  if (btn) btn.textContent = notesLight ? '☾' : '☀';
+}
+
+function toggleTheme() {
+  notesLight = !notesLight;
+  pdfDark = notesLight; // linked: light notes ↔ dark PDF
+  localStorage.setItem('autonotes_light', notesLight ? '1' : '0');
+  localStorage.setItem('autonotes_pdfdark', pdfDark ? '1' : '0');
+  applyTheme();
+}
+
+function stopPdfSync() {
+  if (pdfSyncInterval) { clearInterval(pdfSyncInterval); pdfSyncInterval = null; }
+}
+
+function startPdfSync(iframe) {
+  stopPdfSync();
+  let lastPage = null;
+  pdfSyncInterval = setInterval(() => {
+    if (Date.now() < pdfSyncSuppressUntil) return;
+    try {
+      const hash = iframe.contentWindow.location.hash;
+      const m = hash.match(/[#&]page=(\d+)/);
+      if (!m) return;
+      const page = parseInt(m[1], 10);
+      if (page === lastPage) return;
+      lastPage = page;
+      scrollNotesToPage(page);
+    } catch (e) {}
+  }, 1200);
+}
+
+function scrollNotesToPage(page) {
+  const scrollEl = document.getElementById('notes-scroll');
+  if (!scrollEl) return;
+  const target = currentHeadings.find(h => {
+    const m = h.textContent.trim().match(/^Slide\s+(\d+)/i);
+    return m && parseInt(m[1], 10) === page;
+  });
+  if (!target) return;
+  const paneTop = scrollEl.getBoundingClientRect().top;
+  const headingTop = target.getBoundingClientRect().top;
+  scrollEl.scrollBy({ top: headingTop - paneTop - 12, behavior: 'smooth' });
+}
+
+function updateFilterBadge() {
+  const badge = document.getElementById('filter-badge');
+  if (!badge) return;
+  if (noNotesCount > 0) {
+    badge.textContent = noNotesCount;
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
 function buildToc(root) {
   const container = document.getElementById('toc-list-container');
   if (!container) return;
@@ -808,6 +926,7 @@ function buildToc(root) {
 
   const headings = Array.from(body.querySelectorAll('h1, h2, h3'));
   if (headings.length < 2) { container.innerHTML = ''; return; }
+  currentHeadings = headings;
 
   // Assign stable IDs to headings
   const seen = {};
@@ -844,6 +963,8 @@ function buildToc(root) {
       if (pageNum !== null) {
         const iframe = document.getElementById('pdf-frame');
         if (iframe && currentFile) {
+          // Suppress reverse-sync for 2.5s to avoid feedback loop
+          pdfSyncSuppressUntil = Date.now() + 2500;
           // Add timestamp to force full reload — hash-only changes are treated
           // as same-document navigation and the PDF viewer ignores them.
           const pdfBase = '/file?path=' + encodeURIComponent(currentFile.pdf);
@@ -877,6 +998,10 @@ function buildToc(root) {
     scrollEl.addEventListener('scroll', updateActive);
     updateActive();
   }
+
+  // Start PDF → notes reverse sync
+  const iframe = document.getElementById('pdf-frame');
+  if (iframe) startPdfSync(iframe);
 }
 
 function enhanceRenderedNotes(root) {
@@ -966,6 +1091,7 @@ async function loadFiles() {
 
   const savedPdf = localStorage.getItem('autonotes_last');
   let autoOpen = null;
+  noNotesCount = 0;
 
   for (const group of groups) {
     const g = document.createElement('div');
@@ -981,6 +1107,7 @@ async function loadFiles() {
       item.className = 'file-item' + (f.has_notes ? '' : ' no-notes');
       item.textContent = f.stem;
       item.title = f.pdf;
+      if (!f.has_notes) noNotesCount++;
       if (!f.has_notes && hideNoNotes) item.style.display = 'none';
       item.addEventListener('click', () => openFile(f, item));
       g.appendChild(item);
@@ -989,6 +1116,7 @@ async function loadFiles() {
     list.appendChild(g);
   }
 
+  updateFilterBadge();
   if (autoOpen) openFile(autoOpen.f, autoOpen.item);
 }
 
@@ -998,6 +1126,8 @@ function toggleHideNoNotes() {
   document.querySelectorAll('.file-item.no-notes').forEach(el => {
     el.style.display = hideNoNotes ? 'none' : '';
   });
+  const badge = document.getElementById('filter-badge');
+  if (badge) badge.style.display = hideNoNotes ? 'none' : (noNotesCount > 0 ? '' : 'none');
 }
 
 async function renderNotesInto(f, paneEl) {
@@ -1010,15 +1140,20 @@ async function renderNotesInto(f, paneEl) {
     <div class="notes-shell">
       <div class="notes-meta">
         <span>${f.stem}.md</span>
-        <button class="refresh-btn" title="노트 새로고침">↻</button>
+        <div style="display:flex;gap:5px;align-items:center">
+          <button class="refresh-btn theme-btn" title="노트 라이트/다크 + PDF 다크모드 전환">${notesLight ? '☾' : '☀'}</button>
+          <button class="refresh-btn" title="노트 새로고침">↻</button>
+        </div>
       </div>
       <article class="markdown-body">${rendered}</article>
     </div>
   `;
-  scrollEl.querySelector('.refresh-btn').addEventListener('click', async function() {
+  scrollEl.querySelector('.theme-btn').addEventListener('click', toggleTheme);
+  scrollEl.querySelector('[title="노트 새로고침"]').addEventListener('click', async function() {
     this.classList.add('spinning');
     await renderNotesInto(f, paneEl);
   });
+  applyTheme();
   enhanceRenderedNotes(scrollEl);
   scrollEl.scrollTop = 0;
 }
@@ -1041,6 +1176,7 @@ async function openFile(f, item) {
   if (!iframe) {
     iframe = document.createElement('iframe');
     iframe.id = 'pdf-frame';
+    if (pdfDark) iframe.classList.add('pdf-dark');
 
     divider = document.createElement('div');
     divider.id = 'divider';
@@ -1169,6 +1305,7 @@ function setupDivider(divider, iframe, notesPane) {
 }
 
 loadFiles();
+applyTheme();
 </script>
 </body>
 </html>
