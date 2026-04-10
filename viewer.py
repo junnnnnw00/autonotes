@@ -675,6 +675,7 @@ let hideNoNotes = false;
 let noNotesCount = 0;
 let notesLight = localStorage.getItem('autonotes_light') === '1';
 let pdfDark = localStorage.getItem('autonotes_pdfdark') !== '0'; // default: true
+let notesZoom = parseFloat(localStorage.getItem('autonotes_zoom')) || 15; // px
 let pdfSyncEnabled = localStorage.getItem('autonotes_sync') !== '0'; // default: true
 let pdfSyncSuppressUntil = 0;
 let currentHeadings = [];
@@ -877,6 +878,15 @@ function applyTheme() {
   if (iframe) iframe.classList.toggle('pdf-dark', pdfDark);
   const btn = document.getElementById('notes-toolbar')?.querySelector('.theme-btn');
   if (btn) btn.textContent = notesLight ? '☾' : '☀';
+}
+
+function changeNotesZoom(delta) {
+  notesZoom = Math.min(28, Math.max(10, notesZoom + delta));
+  localStorage.setItem('autonotes_zoom', notesZoom);
+  const body = document.querySelector('.markdown-body');
+  if (body) body.style.fontSize = notesZoom + 'px';
+  const label = document.getElementById('notes-zoom-label');
+  if (label) label.textContent = Math.round((notesZoom / 15) * 100) + '%';
 }
 
 function toggleTheme() {
@@ -1151,6 +1161,8 @@ async function renderNotesInto(f, paneEl) {
     </div>
   `;
   enhanceRenderedNotes(scrollEl);
+  const body = scrollEl.querySelector('.markdown-body');
+  if (body && notesZoom !== 15) body.style.fontSize = notesZoom + 'px';
   scrollEl.scrollTop = 0;
 }
 
@@ -1200,6 +1212,9 @@ async function openFile(f, item) {
       <div id="notes-toolbar">
         <span id="notes-toolbar-filename"></span>
         <div class="toolbar-actions">
+          <button class="refresh-btn" id="notes-zoom-out" title="노트 축소">−</button>
+          <span id="notes-zoom-label" style="font-size:11px;color:var(--muted-2);min-width:34px;text-align:center">${Math.round((notesZoom/15)*100)}%</span>
+          <button class="refresh-btn" id="notes-zoom-in" title="노트 확대">+</button>
           <button class="refresh-btn sync-btn${pdfSyncEnabled ? ' active' : ''}" title="${pdfSyncEnabled ? 'PDF↔노트 동기화 켜짐' : 'PDF↔노트 동기화 꺼짐'}">⇄</button>
           <button class="refresh-btn theme-btn" title="라이트/다크 + PDF 다크모드 전환">${notesLight ? '☾' : '☀'}</button>
           <button class="refresh-btn notes-reload-btn" title="노트 새로고침">↻</button>
@@ -1214,6 +1229,8 @@ async function openFile(f, item) {
     `;
 
     // Toolbar button listeners (set up once)
+    notesPaneEl.querySelector('#notes-zoom-out').addEventListener('click', () => changeNotesZoom(-1));
+    notesPaneEl.querySelector('#notes-zoom-in').addEventListener('click', () => changeNotesZoom(+1));
     notesPaneEl.querySelector('.sync-btn').addEventListener('click', toggleSync);
     notesPaneEl.querySelector('.theme-btn').addEventListener('click', toggleTheme);
     notesPaneEl.querySelector('.notes-reload-btn').addEventListener('click', async function() {
@@ -1335,10 +1352,50 @@ html, body { height: 100%; background: #404040; overflow: hidden; }
 #scroll { position: absolute; inset: 0; overflow-y: auto; padding: 8px 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .pg-wrap { background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.5); flex-shrink: 0; }
 .pg-wrap canvas { display: block; }
+
+#zoom-bar {
+  position: fixed;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(30,30,30,0.88);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 999px;
+  padding: 5px 10px;
+  z-index: 100;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+#zoom-bar.visible, body:hover #zoom-bar { opacity: 1; }
+.z-btn {
+  background: none;
+  border: none;
+  color: #ccc;
+  cursor: pointer;
+  font-size: 15px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.13s, color 0.13s;
+}
+.z-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+#zoom-label { color: #ccc; font-size: 11px; min-width: 38px; text-align: center; font-family: monospace; }
 </style>
 </head>
 <body>
 <div id="scroll"></div>
+<div id="zoom-bar">
+  <button class="z-btn" id="z-out" title="축소">−</button>
+  <span id="zoom-label">100%</span>
+  <button class="z-btn" id="z-in" title="확대">+</button>
+  <button class="z-btn" id="z-fit" title="너비 맞춤" style="font-size:11px;width:auto;padding:0 6px;border-radius:8px">맞춤</button>
+</div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -1346,28 +1403,78 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
 
 const pdfPath = new URLSearchParams(location.search).get('path');
 const scroll = document.getElementById('scroll');
-let pdfDoc = null, scale = 1;
-const visibility = new Map(); // page → ratio
+const zoomLabel = document.getElementById('zoom-label');
+let pdfDoc = null;
+let baseScale = 1;   // fit-to-width scale
+let zoomFactor = 1;  // user multiplier
+let scale = 1;       // baseScale * zoomFactor
+const visibility = new Map();
 let lastReported = 0;
-const renderSet = new Set();
+let renderSet = new Set();
+
+function currentScale() { return baseScale * zoomFactor; }
+
+function updateZoomLabel() {
+  zoomLabel.textContent = Math.round(zoomFactor * 100) + '%';
+}
+
+async function rerender(keepPage) {
+  scale = currentScale();
+  renderSet.clear();
+  scroll.querySelectorAll('.pg-wrap').forEach(wrap => {
+    const page = parseInt(wrap.dataset.page);
+    const vp = { width: baseScale * wrap._nativeWidth * zoomFactor,
+                  height: baseScale * wrap._nativeHeight * zoomFactor };
+    wrap.style.cssText = `width:${vp.width}px;height:${vp.height}px`;
+    wrap.replaceChildren(); // clear canvas, will re-render on intersect
+  });
+  // re-render visible pages
+  visibility.forEach((ratio, page) => {
+    if (ratio > 0) renderPage(page);
+  });
+  if (keepPage) {
+    const wrap = scroll.querySelector(`[data-page="${keepPage}"]`);
+    if (wrap) wrap.scrollIntoView({ block: 'start' });
+  }
+  updateZoomLabel();
+}
+
+function changeZoom(delta) {
+  const steps = [0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+  const cur = zoomFactor;
+  let idx = steps.findIndex(s => s >= cur - 0.01);
+  if (idx === -1) idx = steps.length - 1;
+  idx = Math.min(Math.max(idx + delta, 0), steps.length - 1);
+  zoomFactor = steps[idx];
+  rerender(lastReported || 1);
+}
+
+document.getElementById('z-out').addEventListener('click', () => changeZoom(-1));
+document.getElementById('z-in').addEventListener('click', () => changeZoom(+1));
+document.getElementById('z-fit').addEventListener('click', () => { zoomFactor = 1; rerender(lastReported || 1); });
 
 async function init() {
   pdfDoc = await pdfjsLib.getDocument('/file?path=' + encodeURIComponent(pdfPath)).promise;
-  const firstVp = (await pdfDoc.getPage(1)).getViewport({ scale: 1 });
-  scale = Math.max(0.5, (scroll.clientWidth - 16) / firstVp.width);
-  const w = firstVp.width * scale, h = firstVp.height * scale;
+  const firstPage = await pdfDoc.getPage(1);
+  const nativeVp = firstPage.getViewport({ scale: 1 });
+  baseScale = Math.max(0.5, (scroll.clientWidth - 16) / nativeVp.width);
+  scale = currentScale();
 
   const obs = new IntersectionObserver(onIntersect, { root: scroll, threshold: [0, 0.01, 0.25, 0.5, 0.75, 1] });
   for (let i = 1; i <= pdfDoc.numPages; i++) {
+    const page = await pdfDoc.getPage(i);
+    const vp = page.getViewport({ scale: 1 });
     const wrap = document.createElement('div');
     wrap.className = 'pg-wrap';
     wrap.dataset.page = i;
-    wrap.style.cssText = `width:${w}px;height:${h}px`;
+    wrap._nativeWidth = vp.width;
+    wrap._nativeHeight = vp.height;
+    wrap.style.cssText = `width:${vp.width * scale}px;height:${vp.height * scale}px`;
     scroll.appendChild(wrap);
     obs.observe(wrap);
   }
-  // Render first 2 pages immediately
   renderPage(1); renderPage(2);
+  updateZoomLabel();
 }
 
 function onIntersect(entries) {
@@ -1375,7 +1482,6 @@ function onIntersect(entries) {
     const p = parseInt(e.target.dataset.page);
     visibility.set(p, e.intersectionRatio);
     if (e.isIntersecting) renderPage(p);
-    // preload adjacent pages
     if (e.isIntersecting && p < pdfDoc.numPages) renderPage(p + 1);
   });
   reportCurrentPage();
@@ -1401,7 +1507,7 @@ async function renderPage(pageNum) {
   const wrap = scroll.querySelector(`[data-page="${pageNum}"]`);
   if (!wrap) return;
   const page = await pdfDoc.getPage(pageNum);
-  const vp = page.getViewport({ scale });
+  const vp = page.getViewport({ scale: currentScale() });
   const canvas = document.createElement('canvas');
   canvas.width = vp.width; canvas.height = vp.height;
   wrap.style.cssText = `width:${vp.width}px;height:${vp.height}px`;

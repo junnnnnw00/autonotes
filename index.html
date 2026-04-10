@@ -659,6 +659,7 @@ let hideNoNotes = false;
 let noNotesCount = 0;
 let notesLight = localStorage.getItem('autonotes_light') === '1';
 let pdfDark = localStorage.getItem('autonotes_pdfdark') !== '0'; // default: true
+let notesZoom = parseFloat(localStorage.getItem('autonotes_zoom')) || 15; // px
 let pdfSyncEnabled = localStorage.getItem('autonotes_sync') !== '0'; // default: true
 let pdfSyncSuppressUntil = 0;
 let currentHeadings = [];
@@ -861,6 +862,15 @@ function applyTheme() {
   if (iframe) iframe.classList.toggle('pdf-dark', pdfDark);
   const btn = document.getElementById('notes-toolbar')?.querySelector('.theme-btn');
   if (btn) btn.textContent = notesLight ? '☾' : '☀';
+}
+
+function changeNotesZoom(delta) {
+  notesZoom = Math.min(28, Math.max(10, notesZoom + delta));
+  localStorage.setItem('autonotes_zoom', notesZoom);
+  const body = document.querySelector('.markdown-body');
+  if (body) body.style.fontSize = notesZoom + 'px';
+  const label = document.getElementById('notes-zoom-label');
+  if (label) label.textContent = Math.round((notesZoom / 15) * 100) + '%';
 }
 
 function toggleTheme() {
@@ -1135,6 +1145,8 @@ async function renderNotesInto(f, paneEl) {
     </div>
   `;
   enhanceRenderedNotes(scrollEl);
+  const body = scrollEl.querySelector('.markdown-body');
+  if (body && notesZoom !== 15) body.style.fontSize = notesZoom + 'px';
   scrollEl.scrollTop = 0;
 }
 
@@ -1184,6 +1196,9 @@ async function openFile(f, item) {
       <div id="notes-toolbar">
         <span id="notes-toolbar-filename"></span>
         <div class="toolbar-actions">
+          <button class="refresh-btn" id="notes-zoom-out" title="노트 축소">−</button>
+          <span id="notes-zoom-label" style="font-size:11px;color:var(--muted-2);min-width:34px;text-align:center">${Math.round((notesZoom/15)*100)}%</span>
+          <button class="refresh-btn" id="notes-zoom-in" title="노트 확대">+</button>
           <button class="refresh-btn sync-btn${pdfSyncEnabled ? ' active' : ''}" title="${pdfSyncEnabled ? 'PDF↔노트 동기화 켜짐' : 'PDF↔노트 동기화 꺼짐'}">⇄</button>
           <button class="refresh-btn theme-btn" title="라이트/다크 + PDF 다크모드 전환">${notesLight ? '☾' : '☀'}</button>
           <button class="refresh-btn notes-reload-btn" title="노트 새로고침">↻</button>
@@ -1198,6 +1213,8 @@ async function openFile(f, item) {
     `;
 
     // Toolbar button listeners (set up once)
+    notesPaneEl.querySelector('#notes-zoom-out').addEventListener('click', () => changeNotesZoom(-1));
+    notesPaneEl.querySelector('#notes-zoom-in').addEventListener('click', () => changeNotesZoom(+1));
     notesPaneEl.querySelector('.sync-btn').addEventListener('click', toggleSync);
     notesPaneEl.querySelector('.theme-btn').addEventListener('click', toggleTheme);
     notesPaneEl.querySelector('.notes-reload-btn').addEventListener('click', async function() {
