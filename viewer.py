@@ -1010,10 +1010,10 @@ function buildToc(root) {
   if (scrollEl) {
     const links = Array.from(container.querySelectorAll('.toc-item > a'));
     function updateActive() {
-      const scrollTop = scrollEl.scrollTop;
+      const containerTop = scrollEl.getBoundingClientRect().top;
       let active = null;
       for (const h of headings) {
-        if (h.offsetTop - 48 <= scrollTop) active = h.id;
+        if (h.getBoundingClientRect().top - containerTop <= 48) active = h.id;
         else break;
       }
       links.forEach(a => {
