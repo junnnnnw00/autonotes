@@ -1,20 +1,4 @@
-"""
-autonotes 뷰어 — PDF와 노트를 나란히 보여주는 로컬 웹 서버
-사용법: python viewer.py [루트_디렉토리]  (기본값: 현재 디렉토리)
-"""
-import json
-import mimetypes
-import sys
-import threading
-import webbrowser
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from pathlib import Path
-from urllib.parse import parse_qs, unquote, urlparse
-
-ROOT = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path.cwd()
-PORT = 7788
-
-HTML = r"""<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -1085,7 +1069,7 @@ function enhanceRenderedNotes(root) {
 }
 
 async function loadFiles() {
-  const res = await fetch('/api/files');
+  const res = await fetch('files.json');
   const groups = await res.json();
   const list = document.getElementById('file-list');
   list.innerHTML = '';
@@ -1137,7 +1121,7 @@ function toggleHideNoNotes() {
 }
 
 async function renderNotesInto(f, paneEl) {
-  const res = await fetch('/file?path=' + encodeURIComponent(f.md) + '&raw=1');
+  const res = await fetch(f.md);
   const markdown = await res.text();
   const rendered = renderMarkdown(markdown);
 
@@ -1244,7 +1228,7 @@ async function openFile(f, item) {
     });
   }
 
-  iframe.src = '/pdfview?path=' + encodeURIComponent(f.pdf);
+  iframe.src = 'pdfview.html?path=' + encodeURIComponent(f.pdf);
 
   if (f.has_notes) {
     await renderNotesInto(f, notesPaneEl);
@@ -1322,185 +1306,3 @@ applyTheme();
 </script>
 </body>
 </html>
-"""
-
-
-PDFVIEW_HTML = r"""<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8">
-<style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { height: 100%; background: #404040; overflow: hidden; }
-#scroll { position: absolute; inset: 0; overflow-y: auto; padding: 8px 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.pg-wrap { background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.5); flex-shrink: 0; }
-.pg-wrap canvas { display: block; }
-</style>
-</head>
-<body>
-<div id="scroll"></div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script>
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-
-const pdfPath = new URLSearchParams(location.search).get('path');
-const scroll = document.getElementById('scroll');
-let pdfDoc = null, scale = 1;
-const visibility = new Map(); // page → ratio
-let lastReported = 0;
-const renderSet = new Set();
-
-async function init() {
-  pdfDoc = await pdfjsLib.getDocument('/file?path=' + encodeURIComponent(pdfPath)).promise;
-  const firstVp = (await pdfDoc.getPage(1)).getViewport({ scale: 1 });
-  scale = Math.max(0.5, (scroll.clientWidth - 16) / firstVp.width);
-  const w = firstVp.width * scale, h = firstVp.height * scale;
-
-  const obs = new IntersectionObserver(onIntersect, { root: scroll, threshold: [0, 0.01, 0.25, 0.5, 0.75, 1] });
-  for (let i = 1; i <= pdfDoc.numPages; i++) {
-    const wrap = document.createElement('div');
-    wrap.className = 'pg-wrap';
-    wrap.dataset.page = i;
-    wrap.style.cssText = `width:${w}px;height:${h}px`;
-    scroll.appendChild(wrap);
-    obs.observe(wrap);
-  }
-  // Render first 2 pages immediately
-  renderPage(1); renderPage(2);
-}
-
-function onIntersect(entries) {
-  entries.forEach(e => {
-    const p = parseInt(e.target.dataset.page);
-    visibility.set(p, e.intersectionRatio);
-    if (e.isIntersecting) renderPage(p);
-    // preload adjacent pages
-    if (e.isIntersecting && p < pdfDoc.numPages) renderPage(p + 1);
-  });
-  reportCurrentPage();
-}
-
-function reportCurrentPage() {
-  let best = 0, bestRatio = 0;
-  visibility.forEach((ratio, page) => {
-    if (ratio > bestRatio || (ratio === bestRatio && page < best)) {
-      bestRatio = ratio; best = page;
-    }
-  });
-  if (best > 0 && best !== lastReported) {
-    lastReported = best;
-    window.parent.postMessage({ type: 'pagechange', page: best }, '*');
-  }
-}
-
-async function renderPage(pageNum) {
-  if (pageNum < 1 || pageNum > pdfDoc?.numPages) return;
-  if (renderSet.has(pageNum)) return;
-  renderSet.add(pageNum);
-  const wrap = scroll.querySelector(`[data-page="${pageNum}"]`);
-  if (!wrap) return;
-  const page = await pdfDoc.getPage(pageNum);
-  const vp = page.getViewport({ scale });
-  const canvas = document.createElement('canvas');
-  canvas.width = vp.width; canvas.height = vp.height;
-  wrap.style.cssText = `width:${vp.width}px;height:${vp.height}px`;
-  wrap.replaceChildren(canvas);
-  await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
-}
-
-window.addEventListener('message', e => {
-  if (e.data?.type !== 'gotopage') return;
-  const wrap = scroll.querySelector(`[data-page="${e.data.page}"]`);
-  if (wrap) wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
-});
-
-init().catch(console.error);
-</script>
-</body>
-</html>
-"""
-
-
-class Handler(BaseHTTPRequestHandler):
-    def log_message(self, *_):
-        pass
-
-    def do_GET(self):
-        parsed = urlparse(self.path)
-        path = parsed.path
-        qs = parse_qs(parsed.query)
-
-        if path == "/":
-            self._respond(200, "text/html; charset=utf-8", HTML.encode("utf-8"))
-
-        elif path == "/pdfview":
-            self._respond(200, "text/html; charset=utf-8", PDFVIEW_HTML.encode("utf-8"))
-
-        elif path == "/api/files":
-            data = self._list_files()
-            self._respond(200, "application/json; charset=utf-8", json.dumps(data, ensure_ascii=False).encode("utf-8"))
-
-        elif path == "/file":
-            rel = unquote(qs.get("path", [""])[0])
-            raw = qs.get("raw", ["0"])[0] == "1"
-            file_path = ROOT / rel
-            if not file_path.resolve().is_relative_to(ROOT):
-                self._respond(403, "text/plain; charset=utf-8", b"Forbidden")
-                return
-            if not file_path.exists():
-                self._respond(404, "text/plain; charset=utf-8", b"Not found")
-                return
-            mime = "text/plain; charset=utf-8" if raw else (
-                mimetypes.guess_type(str(file_path))[0] or "application/octet-stream"
-            )
-            self._respond(200, mime, file_path.read_bytes())
-
-        else:
-            self._respond(404, "text/plain; charset=utf-8", b"Not found")
-
-    def _respond(self, code, mime, body):
-        self.send_response(code)
-        self.send_header("Content-Type", mime)
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def _list_files(self):
-        groups: dict[str, list] = {}
-        for pdf in sorted(ROOT.glob("**/*.pdf")):
-            rel_pdf = str(pdf.relative_to(ROOT))
-            rel_md = str(pdf.with_suffix(".md").relative_to(ROOT))
-            has_notes = pdf.with_suffix(".md").exists()
-            parts = pdf.relative_to(ROOT).parts
-            course = parts[0] if len(parts) > 1 else "."
-            groups.setdefault(course, []).append({
-                "stem": pdf.stem,
-                "pdf": rel_pdf,
-                "md": rel_md,
-                "has_notes": has_notes,
-            })
-        return [{"course": k, "files": v} for k, v in groups.items()]
-
-
-def main():
-    server = HTTPServer(("localhost", 0), Handler)
-    server.allow_reuse_address = True
-    port = server.server_address[1]
-    url = f"http://localhost:{port}"
-    print(f"autonotes 뷰어 시작: {url}")
-    print(f"루트 디렉토리: {ROOT}")
-    print("종료하려면 Ctrl+C")
-    threading.Timer(0.5, lambda: webbrowser.open(url)).start()
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        server.shutdown()
-        server.server_close()
-        print("\n서버 종료.")
-
-
-if __name__ == "__main__":
-    main()

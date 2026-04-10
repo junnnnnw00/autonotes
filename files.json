@@ -1,0 +1,43 @@
+[
+  {
+    "course": "CSED226",
+    "files": [
+      {
+        "stem": "decisionTree",
+        "pdf": "CSED226/decisionTree.pdf",
+        "md": "CSED226/decisionTree.md",
+        "has_notes": true
+      },
+      {
+        "stem": "diskANN",
+        "pdf": "CSED226/diskANN.pdf",
+        "md": "CSED226/diskANN.md",
+        "has_notes": true
+      },
+      {
+        "stem": "kNN",
+        "pdf": "CSED226/kNN.pdf",
+        "md": "CSED226/kNN.md",
+        "has_notes": true
+      },
+      {
+        "stem": "numpy",
+        "pdf": "CSED226/numpy.pdf",
+        "md": "CSED226/numpy.md",
+        "has_notes": true
+      },
+      {
+        "stem": "pandas",
+        "pdf": "CSED226/pandas.pdf",
+        "md": "CSED226/pandas.md",
+        "has_notes": true
+      },
+      {
+        "stem": "pandasII",
+        "pdf": "CSED226/pandasII.pdf",
+        "md": "CSED226/pandasII.md",
+        "has_notes": true
+      }
+    ]
+  }
+]
