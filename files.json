@@ -39,5 +39,70 @@
         "has_notes": true
       }
     ]
+  },
+  {
+    "course": "CSED233",
+    "files": [
+      {
+        "stem": "10_AVL_tree",
+        "pdf": "CSED233/10_AVL_tree.pdf",
+        "md": "CSED233/10_AVL_tree.md",
+        "has_notes": true
+      },
+      {
+        "stem": "1_intro",
+        "pdf": "CSED233/1_intro.pdf",
+        "md": "CSED233/1_intro.md",
+        "has_notes": true
+      },
+      {
+        "stem": "2_c++",
+        "pdf": "CSED233/2_c++.pdf",
+        "md": "CSED233/2_c++.md",
+        "has_notes": true
+      },
+      {
+        "stem": "3_algorithm",
+        "pdf": "CSED233/3_algorithm.pdf",
+        "md": "CSED233/3_algorithm.md",
+        "has_notes": true
+      },
+      {
+        "stem": "4_lists_stacks_queues",
+        "pdf": "CSED233/4_lists_stacks_queues.pdf",
+        "md": "CSED233/4_lists_stacks_queues.md",
+        "has_notes": true
+      },
+      {
+        "stem": "5_trees_1",
+        "pdf": "CSED233/5_trees_1.pdf",
+        "md": "CSED233/5_trees_1.md",
+        "has_notes": true
+      },
+      {
+        "stem": "6_trees_2",
+        "pdf": "CSED233/6_trees_2.pdf",
+        "md": "CSED233/6_trees_2.md",
+        "has_notes": true
+      },
+      {
+        "stem": "7_priority_queues_heaps",
+        "pdf": "CSED233/7_priority_queues_heaps.pdf",
+        "md": "CSED233/7_priority_queues_heaps.md",
+        "has_notes": true
+      },
+      {
+        "stem": "8_sorting",
+        "pdf": "CSED233/8_sorting.pdf",
+        "md": "CSED233/8_sorting.md",
+        "has_notes": true
+      },
+      {
+        "stem": "9_binary_search_tree",
+        "pdf": "CSED233/9_binary_search_tree.pdf",
+        "md": "CSED233/9_binary_search_tree.md",
+        "has_notes": true
+      }
+    ]
   }
 ]
