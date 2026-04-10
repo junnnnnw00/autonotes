@@ -627,6 +627,7 @@ HTML = r"""<!DOCTYPE html>
     flex-shrink: 0;
   }
   .refresh-btn:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+  .refresh-btn.active { color: var(--accent); border-color: var(--accent); }
   .refresh-btn.spinning { animation: spin 0.6s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -659,8 +660,8 @@ let currentFile = null;
 let hideNoNotes = false;
 let noNotesCount = 0;
 let notesLight = localStorage.getItem('autonotes_light') === '1';
-let pdfDark = localStorage.getItem('autonotes_pdfdark') === '1';
-let pdfSyncInterval = null;
+let pdfDark = localStorage.getItem('autonotes_pdfdark') !== '0'; // default: true
+let pdfSyncEnabled = localStorage.getItem('autonotes_sync') !== '0'; // default: true
 let pdfSyncSuppressUntil = 0;
 let currentHeadings = [];
 
@@ -866,32 +867,29 @@ function applyTheme() {
 
 function toggleTheme() {
   notesLight = !notesLight;
-  pdfDark = notesLight; // linked: light notes ↔ dark PDF
+  pdfDark = !notesLight; // dark notes → dark PDF, light notes → light PDF
   localStorage.setItem('autonotes_light', notesLight ? '1' : '0');
   localStorage.setItem('autonotes_pdfdark', pdfDark ? '1' : '0');
   applyTheme();
 }
 
-function stopPdfSync() {
-  if (pdfSyncInterval) { clearInterval(pdfSyncInterval); pdfSyncInterval = null; }
+function toggleSync() {
+  pdfSyncEnabled = !pdfSyncEnabled;
+  localStorage.setItem('autonotes_sync', pdfSyncEnabled ? '1' : '0');
+  const btn = document.querySelector('.sync-btn');
+  if (btn) {
+    btn.classList.toggle('active', pdfSyncEnabled);
+    btn.title = pdfSyncEnabled ? 'PDF↔노트 동기화 켜짐 (클릭하여 끄기)' : 'PDF↔노트 동기화 꺼짐 (클릭하여 켜기)';
+  }
 }
 
-function startPdfSync(iframe) {
-  stopPdfSync();
-  let lastPage = null;
-  pdfSyncInterval = setInterval(() => {
-    if (Date.now() < pdfSyncSuppressUntil) return;
-    try {
-      const hash = iframe.contentWindow.location.hash;
-      const m = hash.match(/[#&]page=(\d+)/);
-      if (!m) return;
-      const page = parseInt(m[1], 10);
-      if (page === lastPage) return;
-      lastPage = page;
-      scrollNotesToPage(page);
-    } catch (e) {}
-  }, 1200);
-}
+// PDF→notes reverse sync via postMessage from /pdfview iframe
+window.addEventListener('message', e => {
+  if (e.data?.type !== 'pagechange') return;
+  if (!pdfSyncEnabled) return;
+  if (Date.now() < pdfSyncSuppressUntil) return;
+  scrollNotesToPage(e.data.page);
+});
 
 function scrollNotesToPage(page) {
   const scrollEl = document.getElementById('notes-scroll');
@@ -962,13 +960,10 @@ function buildToc(root) {
       // Sync PDF to corresponding page for Slide headings
       if (pageNum !== null) {
         const iframe = document.getElementById('pdf-frame');
-        if (iframe && currentFile) {
+        if (iframe) {
           // Suppress reverse-sync for 2.5s to avoid feedback loop
           pdfSyncSuppressUntil = Date.now() + 2500;
-          // Add timestamp to force full reload — hash-only changes are treated
-          // as same-document navigation and the PDF viewer ignores them.
-          const pdfBase = '/file?path=' + encodeURIComponent(currentFile.pdf);
-          iframe.src = pdfBase + '&_t=' + Date.now() + '#page=' + pageNum;
+          iframe.contentWindow.postMessage({ type: 'gotopage', page: pageNum }, '*');
         }
       }
     });
@@ -999,9 +994,6 @@ function buildToc(root) {
     updateActive();
   }
 
-  // Start PDF → notes reverse sync
-  const iframe = document.getElementById('pdf-frame');
-  if (iframe) startPdfSync(iframe);
 }
 
 function enhanceRenderedNotes(root) {
@@ -1141,6 +1133,7 @@ async function renderNotesInto(f, paneEl) {
       <div class="notes-meta">
         <span>${f.stem}.md</span>
         <div style="display:flex;gap:5px;align-items:center">
+          <button class="refresh-btn sync-btn${pdfSyncEnabled ? ' active' : ''}" title="${pdfSyncEnabled ? 'PDF↔노트 동기화 켜짐 (클릭하여 끄기)' : 'PDF↔노트 동기화 꺼짐 (클릭하여 켜기)'}">⇄</button>
           <button class="refresh-btn theme-btn" title="노트 라이트/다크 + PDF 다크모드 전환">${notesLight ? '☾' : '☀'}</button>
           <button class="refresh-btn" title="노트 새로고침">↻</button>
         </div>
@@ -1148,6 +1141,7 @@ async function renderNotesInto(f, paneEl) {
       <article class="markdown-body">${rendered}</article>
     </div>
   `;
+  scrollEl.querySelector('.sync-btn').addEventListener('click', toggleSync);
   scrollEl.querySelector('.theme-btn').addEventListener('click', toggleTheme);
   scrollEl.querySelector('[title="노트 새로고침"]').addEventListener('click', async function() {
     this.classList.add('spinning');
@@ -1231,7 +1225,7 @@ async function openFile(f, item) {
     });
   }
 
-  iframe.src = '/file?path=' + encodeURIComponent(f.pdf);
+  iframe.src = '/pdfview?path=' + encodeURIComponent(f.pdf);
 
   if (f.has_notes) {
     await renderNotesInto(f, notesPaneEl);
@@ -1312,6 +1306,103 @@ applyTheme();
 """
 
 
+PDFVIEW_HTML = r"""<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: #404040; overflow: hidden; }
+#scroll { position: absolute; inset: 0; overflow-y: auto; padding: 8px 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.pg-wrap { background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.5); flex-shrink: 0; }
+.pg-wrap canvas { display: block; }
+</style>
+</head>
+<body>
+<div id="scroll"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const pdfPath = new URLSearchParams(location.search).get('path');
+const scroll = document.getElementById('scroll');
+let pdfDoc = null, scale = 1;
+const visibility = new Map(); // page → ratio
+let lastReported = 0;
+const renderSet = new Set();
+
+async function init() {
+  pdfDoc = await pdfjsLib.getDocument('/file?path=' + encodeURIComponent(pdfPath)).promise;
+  const firstVp = (await pdfDoc.getPage(1)).getViewport({ scale: 1 });
+  scale = Math.max(0.5, (scroll.clientWidth - 16) / firstVp.width);
+  const w = firstVp.width * scale, h = firstVp.height * scale;
+
+  const obs = new IntersectionObserver(onIntersect, { root: scroll, threshold: [0, 0.01, 0.25, 0.5, 0.75, 1] });
+  for (let i = 1; i <= pdfDoc.numPages; i++) {
+    const wrap = document.createElement('div');
+    wrap.className = 'pg-wrap';
+    wrap.dataset.page = i;
+    wrap.style.cssText = `width:${w}px;height:${h}px`;
+    scroll.appendChild(wrap);
+    obs.observe(wrap);
+  }
+  // Render first 2 pages immediately
+  renderPage(1); renderPage(2);
+}
+
+function onIntersect(entries) {
+  entries.forEach(e => {
+    const p = parseInt(e.target.dataset.page);
+    visibility.set(p, e.intersectionRatio);
+    if (e.isIntersecting) renderPage(p);
+    // preload adjacent pages
+    if (e.isIntersecting && p < pdfDoc.numPages) renderPage(p + 1);
+  });
+  reportCurrentPage();
+}
+
+function reportCurrentPage() {
+  let best = 0, bestRatio = 0;
+  visibility.forEach((ratio, page) => {
+    if (ratio > bestRatio || (ratio === bestRatio && page < best)) {
+      bestRatio = ratio; best = page;
+    }
+  });
+  if (best > 0 && best !== lastReported) {
+    lastReported = best;
+    window.parent.postMessage({ type: 'pagechange', page: best }, '*');
+  }
+}
+
+async function renderPage(pageNum) {
+  if (pageNum < 1 || pageNum > pdfDoc?.numPages) return;
+  if (renderSet.has(pageNum)) return;
+  renderSet.add(pageNum);
+  const wrap = scroll.querySelector(`[data-page="${pageNum}"]`);
+  if (!wrap) return;
+  const page = await pdfDoc.getPage(pageNum);
+  const vp = page.getViewport({ scale });
+  const canvas = document.createElement('canvas');
+  canvas.width = vp.width; canvas.height = vp.height;
+  wrap.style.cssText = `width:${vp.width}px;height:${vp.height}px`;
+  wrap.replaceChildren(canvas);
+  await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+}
+
+window.addEventListener('message', e => {
+  if (e.data?.type !== 'gotopage') return;
+  const wrap = scroll.querySelector(`[data-page="${e.data.page}"]`);
+  if (wrap) wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+init().catch(console.error);
+</script>
+</body>
+</html>
+"""
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_):
         pass
@@ -1323,6 +1414,9 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/":
             self._respond(200, "text/html; charset=utf-8", HTML.encode("utf-8"))
+
+        elif path == "/pdfview":
+            self._respond(200, "text/html; charset=utf-8", PDFVIEW_HTML.encode("utf-8"))
 
         elif path == "/api/files":
             data = self._list_files()
