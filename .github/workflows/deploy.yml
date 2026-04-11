@@ -28,6 +28,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add index.html pdfview.html files.json manifest.json sw.js icon.svg icon-512.png
+          git add index.html pdfview.html files.json manifest.json sw.js icon.svg icon-512.png favicon.svg icon-192.png
           git diff --cached --quiet || git commit -m "chore: rebuild static site [skip ci]"
           git push
