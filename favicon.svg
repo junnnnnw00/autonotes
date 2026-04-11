@@ -1,16 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="40%" y2="100%">
-      <stop offset="0%"   stop-color="#62B0F5"/>
-      <stop offset="100%" stop-color="#1A55AD"/>
-    </linearGradient>
-  </defs>
-  <rect width="32" height="32" rx="6" fill="url(#bg)"/>
-  <!-- Simplified document silhouette -->
-  <rect x="7" y="5" width="18" height="22" rx="2" fill="white" opacity="0.95"/>
-  <rect x="7" y="5" width="18" height="6" rx="2" fill="#D6EAFA"/>
-  <rect x="7" y="9" width="18" height="2" fill="#D6EAFA"/>
-  <rect x="10" y="14" width="12" height="1.5" rx="0.5" fill="#BBBBBB"/>
-  <rect x="10" y="18" width="12" height="1.5" rx="0.5" fill="#BBBBBB"/>
-  <rect x="10" y="22" width="8"  height="1.5" rx="0.5" fill="#BBBBBB"/>
+  <!-- No background — transparent for browser tab -->
+  <!-- Blue document card (visible on light & dark tab bars) -->
+  <rect x="7" y="5" width="18" height="22" rx="2" fill="#1A55AD"/>
+  <!-- Lighter header band -->
+  <rect x="7" y="5" width="18" height="6"  rx="2" fill="#62B0F5"/>
+  <rect x="7" y="9" width="18" height="2"        fill="#62B0F5"/>
+  <!-- White text lines -->
+  <rect x="10" y="14" width="12" height="1.5" rx="0.5" fill="white" opacity="0.85"/>
+  <rect x="10" y="18" width="12" height="1.5" rx="0.5" fill="white" opacity="0.85"/>
+  <rect x="10" y="22" width="8"  height="1.5" rx="0.5" fill="white" opacity="0.85"/>
 </svg>
