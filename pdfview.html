@@ -61,9 +61,10 @@ const pdfPath = new URLSearchParams(location.search).get('path');
 const scroll = document.getElementById('scroll');
 const zoomLabel = document.getElementById('zoom-label');
 let pdfDoc = null;
-let baseScale = 1;   // fit-to-width scale
-let zoomFactor = 1;  // user multiplier
-let scale = 1;       // baseScale * zoomFactor
+let baseScale = 1;     // fit-to-width scale
+let zoomFactor = 1;    // user multiplier on top of baseScale
+let scale = 1;         // baseScale * zoomFactor
+let nativePageWidth = 0;  // first-page native width (pt), for fit recalc
 const visibility = new Map();
 let lastReported = 0;
 let renderSet = new Set();
@@ -71,7 +72,15 @@ let renderSet = new Set();
 function currentScale() { return baseScale * zoomFactor; }
 
 function updateZoomLabel() {
-  zoomLabel.textContent = Math.round(zoomFactor * 100) + '%';
+  // Show absolute zoom relative to the PDF's native size
+  zoomLabel.textContent = Math.round(baseScale * zoomFactor * 100) + '%';
+}
+
+function fitToWidth() {
+  if (!nativePageWidth) return;
+  baseScale = Math.max(0.5, (scroll.clientWidth - 16) / nativePageWidth);
+  zoomFactor = 1;
+  rerender(lastReported || 1);
 }
 
 async function rerender(keepPage) {
@@ -107,13 +116,14 @@ function changeZoom(delta) {
 
 document.getElementById('z-out').addEventListener('click', () => changeZoom(-1));
 document.getElementById('z-in').addEventListener('click', () => changeZoom(+1));
-document.getElementById('z-fit').addEventListener('click', () => { zoomFactor = 1; rerender(lastReported || 1); });
+document.getElementById('z-fit').addEventListener('click', fitToWidth);
 
 async function init() {
   pdfDoc = await pdfjsLib.getDocument(pdfPath).promise;
   const firstPage = await pdfDoc.getPage(1);
   const nativeVp = firstPage.getViewport({ scale: 1 });
-  baseScale = Math.max(0.5, (scroll.clientWidth - 16) / nativeVp.width);
+  nativePageWidth = nativeVp.width;
+  baseScale = Math.max(0.5, (scroll.clientWidth - 16) / nativePageWidth);
   scale = currentScale();
 
   const obs = new IntersectionObserver(onIntersect, { root: scroll, threshold: [0, 0.01, 0.25, 0.5, 0.75, 1] });
