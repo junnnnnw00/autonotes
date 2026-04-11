@@ -1,6 +1,6 @@
 {
-  "name": "autonotes",
-  "short_name": "autonotes",
+  "name": "Autonotes",
+  "short_name": "Autonotes",
   "description": "PDF 슬라이드와 AI 강의노트를 나란히 보는 뷰어",
   "start_url": ".",
   "display": "standalone",
@@ -8,7 +8,6 @@
   "theme_color": "#252526",
   "lang": "ko",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
   ]
 }

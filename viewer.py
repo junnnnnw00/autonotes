@@ -12,6 +12,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 ROOT = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path.cwd()
+SCRIPT_DIR = Path(__file__).parent.resolve()  # repo root — for serving static PWA assets
 PORT = 7788
 
 HTML = r"""<!DOCTYPE html>
@@ -19,13 +20,13 @@ HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>autonotes 뷰어</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23252526'/%3E%3Crect x='7' y='6' width='14' height='18' rx='2' fill='none' stroke='%23569cd6' stroke-width='1.8'/%3E%3Cline x1='10' y1='11' x2='18' y2='11' stroke='%23569cd6' stroke-width='1.5' stroke-linecap='round'/%3E%3Cline x1='10' y1='14.5' x2='18' y2='14.5' stroke='%23569cd6' stroke-width='1.5' stroke-linecap='round'/%3E%3Cline x1='10' y1='18' x2='15' y2='18' stroke='%23569cd6' stroke-width='1.5' stroke-linecap='round'/%3E%3Ccircle cx='22' cy='22' r='5' fill='%234ec9b0'/%3E%3Cline x1='20' y1='22' x2='24' y2='22' stroke='%23252526' stroke-width='1.8' stroke-linecap='round'/%3E%3Cline x1='22' y1='20' x2='22' y2='24' stroke='%23252526' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E">
+<title>Autonotes</title>
+<link rel="icon" type="image/svg+xml" href="icon.svg">
 <link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon.svg">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<meta name="apple-mobile-web-app-title" content="autonotes">
+<meta name="apple-mobile-web-app-title" content="Autonotes">
 <meta name="theme-color" content="#252526">
 
 <!-- markdown renderer -->
@@ -1583,6 +1584,14 @@ class Handler(BaseHTTPRequestHandler):
 
         elif path == "/pdfview":
             self._respond(200, "text/html; charset=utf-8", PDFVIEW_HTML.encode("utf-8"))
+
+        elif path in ("/icon.svg", "/manifest.json", "/sw.js"):
+            file_path = SCRIPT_DIR / path.lstrip("/")
+            if file_path.exists():
+                mime = mimetypes.guess_type(str(file_path))[0] or "application/octet-stream"
+                self._respond(200, mime, file_path.read_bytes())
+            else:
+                self._respond(404, "text/plain; charset=utf-8", b"Not found")
 
         elif path == "/api/files":
             data = self._list_files()
