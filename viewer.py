@@ -20,6 +20,13 @@ HTML = r"""<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>autonotes 뷰어</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23252526'/%3E%3Crect x='7' y='6' width='14' height='18' rx='2' fill='none' stroke='%23569cd6' stroke-width='1.8'/%3E%3Cline x1='10' y1='11' x2='18' y2='11' stroke='%23569cd6' stroke-width='1.5' stroke-linecap='round'/%3E%3Cline x1='10' y1='14.5' x2='18' y2='14.5' stroke='%23569cd6' stroke-width='1.5' stroke-linecap='round'/%3E%3Cline x1='10' y1='18' x2='15' y2='18' stroke='%23569cd6' stroke-width='1.5' stroke-linecap='round'/%3E%3Ccircle cx='22' cy='22' r='5' fill='%234ec9b0'/%3E%3Cline x1='20' y1='22' x2='24' y2='22' stroke='%23252526' stroke-width='1.8' stroke-linecap='round'/%3E%3Cline x1='22' y1='20' x2='22' y2='24' stroke='%23252526' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="autonotes">
+<meta name="theme-color" content="#252526">
 
 <!-- markdown renderer -->
 <script src="https://cdn.jsdelivr.net/npm/markdown-it/dist/markdown-it.min.js"></script>
@@ -667,7 +674,7 @@ HTML = r"""<!DOCTYPE html>
 <div class="layout">
   <button id="sidebar-open-btn" onclick="toggleSidebar()">▶</button>
   <div id="sidebar">
-    <h2>파일 목록 <span class="sidebar-actions"><button id="filter-btn" onclick="toggleHideNoNotes()" title="노트 없는 파일 숨기기">⊘<span class="filter-badge" id="filter-badge" style="display:none"></span></button><button id="toggle-btn" onclick="toggleSidebar()" title="사이드바 닫기">◀</button></span></h2>
+    <h2><span class="sidebar-logo"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 32 32" style="vertical-align:-2px;margin-right:5px"><rect x="4" y="2" width="16" height="22" rx="2.5" fill="none" stroke="#569cd6" stroke-width="2.2"/><line x1="8" y1="9" x2="17" y2="9" stroke="#569cd6" stroke-width="2" stroke-linecap="round"/><line x1="8" y1="13.5" x2="17" y2="13.5" stroke="#569cd6" stroke-width="2" stroke-linecap="round"/><line x1="8" y1="18" x2="14" y2="18" stroke="#569cd6" stroke-width="2" stroke-linecap="round"/><circle cx="24" cy="24" r="6" fill="#4ec9b0"/><line x1="21.5" y1="24" x2="26.5" y2="24" stroke="#1e1e1e" stroke-width="2.2" stroke-linecap="round"/><line x1="24" y1="21.5" x2="24" y2="26.5" stroke="#1e1e1e" stroke-width="2.2" stroke-linecap="round"/></svg></span>autonotes <span class="sidebar-actions"><button id="filter-btn" onclick="toggleHideNoNotes()" title="노트 없는 파일 숨기기">⊘<span class="filter-badge" id="filter-badge" style="display:none"></span></button><button id="toggle-btn" onclick="toggleSidebar()" title="사이드바 닫기">◀</button></span></h2>
     <div id="file-list">불러오는 중...</div>
   </div>
   <div class="panes" id="panes">
@@ -1350,6 +1357,11 @@ function setupDivider(divider, iframe, notesPane) {
 
 loadFiles();
 applyTheme();
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
 </script>
 </body>
 </html>
