@@ -74,11 +74,24 @@ data = [{"course": k, "files": v} for k, v in groups.items()]
 total = sum(len(g["files"]) for g in data)
 print(f"✓ files.json  ({len(data)} courses, {total} files)")
 
-# ── PWA static assets (already in repo, just verify) ─────────────────────────
+# ── PWA static assets ────────────────────────────────────────────────────────
 for fname in ("manifest.json", "sw.js", "icon.svg"):
     if (ROOT / fname).exists():
         print(f"✓ {fname}")
     else:
         print(f"⚠  {fname} not found — skipping")
+
+# Generate icon-512.png from icon.svg (used by macOS dock for crisp rendering)
+try:
+    import cairosvg
+    cairosvg.svg2png(
+        url=str(ROOT / "icon.svg"),
+        write_to=str(ROOT / "icon-512.png"),
+        output_width=512,
+        output_height=512,
+    )
+    print("✓ icon-512.png  (via cairosvg)")
+except ImportError:
+    print("⚠  cairosvg not installed — skipping icon-512.png")
 
 print("\nDone. Commit index.html, pdfview.html, files.json to deploy.")
