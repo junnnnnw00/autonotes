@@ -5,8 +5,13 @@ Produces index.html, pdfview.html, files.json at repo root.
 PDFs and MDs are served directly from their existing paths.
 """
 import json
+import re
 import sys
 from pathlib import Path
+
+
+def _natural_key(path: Path):
+    return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', str(path))]
 
 ROOT = Path(__file__).parent
 
@@ -50,7 +55,7 @@ print("✓ pdfview.html")
 groups: dict[str, list] = {}
 skip_dirs = {"__pycache__", ".git", "node_modules"}
 
-for pdf in sorted(ROOT.glob("**/*.pdf")):
+for pdf in sorted(ROOT.glob("**/*.pdf"), key=_natural_key):
     rel = pdf.relative_to(ROOT)
     # Skip hidden dirs and known non-content dirs
     if any(p.startswith(".") or p in skip_dirs for p in rel.parts):

@@ -4,12 +4,18 @@ autonotes 뷰어 — PDF와 노트를 나란히 보여주는 로컬 웹 서버
 """
 import json
 import mimetypes
+import re
 import sys
 import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
+
+
+def _natural_key(path: Path):
+    """Sort key for natural (human) ordering: '10_foo' comes after '2_bar'."""
+    return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', str(path))]
 
 ROOT = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path.cwd()
 SCRIPT_DIR = Path(__file__).parent.resolve()  # repo root — for serving static PWA assets
@@ -913,6 +919,41 @@ function toggleTheme() {
   applyTheme();
 }
 
+function printNotes() {
+  const body = document.querySelector('.markdown-body');
+  if (!body) return;
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>${currentFile?.stem || 'notes'}</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/markdown-it-texmath/css/texmath.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;line-height:1.75;color:#1a1a1a;background:#fff;padding:28px 40px 48px}
+h1,h2,h3,h4,h5,h6{line-height:1.3;margin:1.2em 0 0.5em;font-weight:700}
+h1{font-size:1.65em;border-bottom:2px solid #ddd;padding-bottom:0.3em}
+h2{font-size:1.3em;border-bottom:1px solid #eee;padding-bottom:0.2em}
+h3{font-size:1.1em}
+p,ul,ol,blockquote,table,pre,details{margin:0.75em 0}
+ul,ol{padding-left:1.5em}
+li{margin:0.2em 0}
+blockquote{border-left:4px solid #ccc;padding:0.6em 1em;color:#555;background:#f9f9f9}
+code{font-family:Menlo,Consolas,monospace;font-size:0.88em;background:#f4f4f4;padding:0.1em 0.35em;border-radius:4px}
+pre{background:#f4f4f4;padding:12px 14px;border-radius:6px;overflow-x:auto}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:auto}
+th,td{border:1px solid #ccc;padding:7px 10px;text-align:left}
+th{background:#f0f0f0;font-weight:700}
+img{max-width:100%;height:auto}
+a{color:#0969da;text-decoration:none}
+hr{border:none;border-top:1px solid #ddd;margin:1.2em 0}
+@media print{body{padding:12px 18px}a{color:#000}}
+</style></head><body>${body.innerHTML}</body></html>`);
+  win.document.close();
+  win.focus();
+  win.onload = () => { win.print(); };
+}
+
 function toggleSync() {
   pdfSyncEnabled = !pdfSyncEnabled;
   localStorage.setItem('autonotes_sync', pdfSyncEnabled ? '1' : '0');
@@ -1239,7 +1280,7 @@ async function openFile(f, item) {
           <button class="refresh-btn" id="notes-zoom-in" title="노트 확대">+</button>
           <button class="refresh-btn sync-btn${pdfSyncEnabled ? ' active' : ''}" title="${pdfSyncEnabled ? 'PDF↔노트 동기화 켜짐' : 'PDF↔노트 동기화 꺼짐'}">⇄</button>
           <button class="refresh-btn theme-btn" title="라이트/다크 + PDF 다크모드 전환">${notesLight ? '☾' : '☀'}</button>
-          <button class="refresh-btn notes-reload-btn" title="노트 새로고침">↻</button>
+          <button class="refresh-btn notes-print-btn" title="PDF로 인쇄/저장">⎙</button>
         </div>
       </div>
       <div id="notes-scroll"></div>
@@ -1255,11 +1296,7 @@ async function openFile(f, item) {
     notesPaneEl.querySelector('#notes-zoom-in').addEventListener('click', () => changeNotesZoom(+1));
     notesPaneEl.querySelector('.sync-btn').addEventListener('click', toggleSync);
     notesPaneEl.querySelector('.theme-btn').addEventListener('click', toggleTheme);
-    notesPaneEl.querySelector('.notes-reload-btn').addEventListener('click', async function() {
-      this.classList.add('spinning');
-      await renderNotesInto(currentFile, notesPaneEl);
-      this.classList.remove('spinning');
-    });
+    notesPaneEl.querySelector('.notes-print-btn').addEventListener('click', printNotes);
 
     // TOC hover show/hide (with small delay to handle cursor gap)
     let tocTimer = null;
@@ -1361,7 +1398,23 @@ applyTheme();
 </script>
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  let swRefreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (swRefreshing) return;
+    swRefreshing = true;
+    showUpdateToast();
+  });
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    // Check for updates every 5 minutes while the page is open
+    setInterval(() => reg.update(), 5 * 60 * 1000);
+  }).catch(() => {});
+}
+
+function showUpdateToast() {
+  const t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#252526;border:1px solid #569cd6;color:#d4d4d4;font-size:13px;padding:10px 18px;border-radius:10px;z-index:9999;display:flex;align-items:center;gap:12px;box-shadow:0 6px 20px rgba(0,0,0,0.45)';
+  t.innerHTML = '업데이트가 있습니다. <button onclick="location.reload()" style="background:#569cd6;color:#fff;border:none;border-radius:6px;padding:4px 12px;cursor:pointer;font-size:12px">새로고침</button><button onclick="this.parentElement.remove()" style="background:none;border:none;color:#858585;cursor:pointer;font-size:16px;line-height:1;padding:0 2px">×</button>';
+  document.body.appendChild(t);
 }
 </script>
 </body>
@@ -1449,7 +1502,7 @@ function updateZoomLabel() {
 
 function fitToWidth() {
   if (!nativePageWidth) return;
-  baseScale = Math.max(0.5, (scroll.clientWidth - 16) / nativePageWidth);
+  baseScale = Math.max(0.5, scroll.clientWidth / nativePageWidth);
   zoomFactor = 1;
   rerender(lastReported || 1);
 }
@@ -1494,7 +1547,7 @@ async function init() {
   const firstPage = await pdfDoc.getPage(1);
   const nativeVp = firstPage.getViewport({ scale: 1 });
   nativePageWidth = nativeVp.width;
-  baseScale = Math.max(0.5, (scroll.clientWidth - 16) / nativePageWidth);
+  baseScale = Math.max(0.5, scroll.clientWidth / nativePageWidth);
   scale = currentScale();
 
   const obs = new IntersectionObserver(onIntersect, { root: scroll, threshold: [0, 0.01, 0.25, 0.5, 0.75, 1] });
@@ -1624,7 +1677,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _list_files(self):
         groups: dict[str, list] = {}
-        for pdf in sorted(ROOT.glob("**/*.pdf")):
+        for pdf in sorted(ROOT.glob("**/*.pdf"), key=_natural_key):
             rel_pdf = str(pdf.relative_to(ROOT))
             rel_md = str(pdf.with_suffix(".md").relative_to(ROOT))
             has_notes = pdf.with_suffix(".md").exists()

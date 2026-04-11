@@ -44,12 +44,6 @@
     "course": "CSED233",
     "files": [
       {
-        "stem": "10_AVL_tree",
-        "pdf": "CSED233/10_AVL_tree.pdf",
-        "md": "CSED233/10_AVL_tree.md",
-        "has_notes": true
-      },
-      {
         "stem": "1_intro",
         "pdf": "CSED233/1_intro.pdf",
         "md": "CSED233/1_intro.md",
@@ -101,6 +95,12 @@
         "stem": "9_binary_search_tree",
         "pdf": "CSED233/9_binary_search_tree.pdf",
         "md": "CSED233/9_binary_search_tree.md",
+        "has_notes": true
+      },
+      {
+        "stem": "10_AVL_tree",
+        "pdf": "CSED233/10_AVL_tree.pdf",
+        "md": "CSED233/10_AVL_tree.md",
         "has_notes": true
       }
     ]
