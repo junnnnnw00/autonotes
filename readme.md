@@ -1,15 +1,15 @@
-# Autonotes
+# 📒 Autonotes
 
 POSTECH CSE 강의 슬라이드(PDF)를 Gemini 2.5 Flash로 페이지별 자동 해설하고, PDF와 노트를 나란히 볼 수 있는 뷰어입니다.
 
-**온라인 뷰어 →** [junnnnnw00.github.io/autonotes](https://junnnnnw00.github.io/autonotes/)
+> **👾 온라인 뷰어** [junnnnnw00.github.io/autonotes](https://junnnnnw00.github.io/autonotes/)
 
-> 강의자료 저작권 이슈로 외부 유출은 자제해 주세요.
-> 새 노트를 추가해 PR을 보내거나, 다른 과목에 맞게 포크하는 것을 환영합니다.
+- 강의자료 저작권 이슈로 외부 유출은 자제해 주세요.
+- 새 노트를 추가해 PR을 보내거나, 다른 과목에 맞게 포크하는 것을 적극 권장합니다.
 
 ---
 
-## 설치
+## 1. 설치
 
 ```bash
 git clone https://github.com/junnnnnw00/autonotes.git
@@ -25,7 +25,7 @@ GEMINI_API_KEY=YOUR_API_KEY_HERE
 
 ---
 
-## 노트 생성
+## 2. 노트 생성
 
 ```bash
 # 단일 파일
@@ -67,7 +67,7 @@ python script.py CSED226/numpy.pdf --slides 3,7,12
 
 ---
 
-## 로컬 뷰어
+## 3. 로컬 뷰어
 
 ```bash
 python viewer.py
@@ -98,7 +98,7 @@ python viewer.py
 
 ---
 
-## 배포 (GitHub Pages)
+## 4. 배포 (GitHub Pages)
 
 `viewer.py`의 HTML을 수정한 뒤:
 
@@ -113,7 +113,7 @@ Push 후 방문자에게 업데이트 알림이 표시됩니다 (PWA Service Wor
 
 ---
 
-## 지원 과목
+## 5. 지원 과목
 
 [POSTECH CSE 교과목](https://cse.postech.ac.kr/csepostech/admissions/under-subjects.do) 전체를 지원합니다.
 새 과목은 `script.py`의 `COURSE_CONTEXTS` 딕셔너리에 항목을 추가하면 됩니다.
