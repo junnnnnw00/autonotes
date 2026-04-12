@@ -184,7 +184,7 @@ HTML = r"""<!DOCTYPE html>
     color: #555;
   }
 
-  .panes { display: flex; flex: 1; overflow: hidden; min-width: 0; }
+  .panes { display: flex; flex: 1; overflow: hidden; min-width: 0; position: relative; }
   iframe {
     flex: 1;
     border: none;
@@ -224,6 +224,38 @@ HTML = r"""<!DOCTYPE html>
       transparent 2px, transparent 5px
     );
   }
+
+  /* PDF-only restore strip — appears on right edge of panes when notes are hidden */
+  #pdf-restore-strip {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 56px;
+    z-index: 50;
+    cursor: pointer;
+    background: var(--panel-3);
+    border: 1px solid var(--border);
+    border-right: none;
+    border-radius: 8px 0 0 8px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+  }
+  #pdf-restore-strip::after {
+    content: '›';
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1;
+    pointer-events: none;
+  }
+  #pdf-restore-strip:hover { background: #007acc; }
+  #pdf-restore-strip.visible { display: flex; }
+
+  /* View mode button active state */
+  .view-btn.active { background: var(--accent) !important; color: #fff !important; }
 
   #notes-pane {
     flex: 1;
@@ -1382,6 +1414,15 @@ async function openFile(f, item) {
     panes.appendChild(iframe);
     panes.appendChild(divider);
     panes.appendChild(notesPaneEl);
+
+    const restoreStrip = document.createElement('div');
+    restoreStrip.id = 'pdf-restore-strip';
+    panes.appendChild(restoreStrip);
+    restoreStrip.addEventListener('click', () => {
+      const d = document.getElementById('divider');
+      if (d && d._setViewMode) d._setViewMode('split');
+    });
+
     setupDivider(divider, iframe, notesPaneEl);
 
     // Restore saved pane ratio
@@ -1398,6 +1439,8 @@ async function openFile(f, item) {
       <div id="notes-toolbar">
         <span id="notes-toolbar-filename"></span>
         <div class="toolbar-actions">
+          <button class="refresh-btn view-btn" id="notes-view-pdf" title="PDF만 보기">◧</button>
+          <button class="refresh-btn view-btn" id="notes-view-notes" title="노트만 보기">◨</button>
           <button class="refresh-btn" id="notes-zoom-out" title="노트 축소">−</button>
           <span id="notes-zoom-label" style="font-size:11px;color:var(--muted-2);min-width:34px;text-align:center" title="클릭하여 100% 초기화">${Math.round((notesZoom/15)*100)}%</span>
           <button class="refresh-btn" id="notes-zoom-in" title="노트 확대">+</button>
@@ -1429,6 +1472,14 @@ async function openFile(f, item) {
     notesPaneEl.querySelector('.sync-btn').addEventListener('click', toggleSync);
     notesPaneEl.querySelector('.theme-btn').addEventListener('click', toggleTheme);
     notesPaneEl.querySelector('.notes-print-btn').addEventListener('click', printNotes);
+    notesPaneEl.querySelector('#notes-view-pdf').addEventListener('click', () => {
+      const d = document.getElementById('divider');
+      if (d && d._setViewMode) d._setViewMode(d._viewMode === 'pdf-only' ? 'split' : 'pdf-only');
+    });
+    notesPaneEl.querySelector('#notes-view-notes').addEventListener('click', () => {
+      const d = document.getElementById('divider');
+      if (d && d._setViewMode) d._setViewMode(d._viewMode === 'notes-only' ? 'split' : 'notes-only');
+    });
 
     // TOC hover show/hide (with small delay to handle cursor gap)
     let tocTimer = null;
@@ -1482,23 +1533,46 @@ function toggleSidebar() {
 
 function setupDivider(divider, iframe, notesPane) {
   let dragging = false;
-  let pdfHidden = false;
+  let viewMode = 'split'; // 'split' | 'pdf-only' | 'notes-only'
 
-  // Double-click: toggle PDF-hidden / full-notes mode
-  divider.addEventListener('dblclick', () => {
-    pdfHidden = !pdfHidden;
-    iframe.style.display = pdfHidden ? 'none' : '';
-    divider.style.display = pdfHidden ? 'none' : '';
-    if (!pdfHidden) {
+  function setViewMode(mode) {
+    viewMode = mode;
+    divider._viewMode = mode;
+    const pdfOnly = mode === 'pdf-only';
+    const notesOnly = mode === 'notes-only';
+    const restoreStrip = document.getElementById('pdf-restore-strip');
+
+    iframe.style.display = notesOnly ? 'none' : '';
+    divider.style.display = (pdfOnly || notesOnly) ? 'none' : '';
+    notesPane.style.display = pdfOnly ? 'none' : '';
+
+    if (mode === 'split') {
       const saved = parseFloat(localStorage.getItem('autonotes_ratio')) || 50;
       iframe.style.flex = 'none';
       iframe.style.width = saved + '%';
       notesPane.style.flex = 'none';
       notesPane.style.width = (100 - saved - 0.4) + '%';
     } else {
+      iframe.style.flex = '';
+      iframe.style.width = '';
       notesPane.style.flex = '';
       notesPane.style.width = '';
     }
+
+    if (restoreStrip) restoreStrip.classList.toggle('visible', pdfOnly);
+
+    const pdfBtn = document.getElementById('notes-view-pdf');
+    const notesBtn = document.getElementById('notes-view-notes');
+    if (pdfBtn) pdfBtn.classList.toggle('active', pdfOnly);
+    if (notesBtn) notesBtn.classList.toggle('active', notesOnly);
+  }
+
+  divider._setViewMode = setViewMode;
+  divider._viewMode = viewMode;
+
+  // Double-click: toggle notes-only mode
+  divider.addEventListener('dblclick', () => {
+    setViewMode(viewMode === 'notes-only' ? 'split' : 'notes-only');
   });
 
   divider.addEventListener('mousedown', e => {
