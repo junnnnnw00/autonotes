@@ -3,39 +3,39 @@
     "course": "CSED226",
     "files": [
       {
-        "stem": "decisionTree",
-        "pdf": "CSED226/decisionTree.pdf",
-        "md": "CSED226/decisionTree.md",
+        "stem": "1.numpy",
+        "pdf": "CSED226/1.numpy.pdf",
+        "md": "CSED226/1.numpy.md",
+        "has_notes": false
+      },
+      {
+        "stem": "2. pandas",
+        "pdf": "CSED226/2. pandas.pdf",
+        "md": "CSED226/2. pandas.md",
         "has_notes": true
       },
       {
-        "stem": "diskANN",
-        "pdf": "CSED226/diskANN.pdf",
-        "md": "CSED226/diskANN.md",
+        "stem": "3.pandasII",
+        "pdf": "CSED226/3.pandasII.pdf",
+        "md": "CSED226/3.pandasII.md",
+        "has_notes": false
+      },
+      {
+        "stem": "4. kNN",
+        "pdf": "CSED226/4. kNN.pdf",
+        "md": "CSED226/4. kNN.md",
         "has_notes": true
       },
       {
-        "stem": "kNN",
-        "pdf": "CSED226/kNN.pdf",
-        "md": "CSED226/kNN.md",
+        "stem": "5. diskANN",
+        "pdf": "CSED226/5. diskANN.pdf",
+        "md": "CSED226/5. diskANN.md",
         "has_notes": true
       },
       {
-        "stem": "numpy",
-        "pdf": "CSED226/numpy.pdf",
-        "md": "CSED226/numpy.md",
-        "has_notes": true
-      },
-      {
-        "stem": "pandas",
-        "pdf": "CSED226/pandas.pdf",
-        "md": "CSED226/pandas.md",
-        "has_notes": true
-      },
-      {
-        "stem": "pandasII",
-        "pdf": "CSED226/pandasII.pdf",
-        "md": "CSED226/pandasII.md",
+        "stem": "6. decisionTree",
+        "pdf": "CSED226/6. decisionTree.pdf",
+        "md": "CSED226/6. decisionTree.md",
         "has_notes": true
       }
     ]
