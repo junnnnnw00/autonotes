@@ -3,10 +3,10 @@
     "course": "CSED226",
     "files": [
       {
-        "stem": "1.numpy",
-        "pdf": "CSED226/1.numpy.pdf",
-        "md": "CSED226/1.numpy.md",
-        "has_notes": false
+        "stem": "1. numpy",
+        "pdf": "CSED226/1. numpy.pdf",
+        "md": "CSED226/1. numpy.md",
+        "has_notes": true
       },
       {
         "stem": "2. pandas",
@@ -15,10 +15,10 @@
         "has_notes": true
       },
       {
-        "stem": "3.pandasII",
-        "pdf": "CSED226/3.pandasII.pdf",
-        "md": "CSED226/3.pandasII.md",
-        "has_notes": false
+        "stem": "3. pandasII",
+        "pdf": "CSED226/3. pandasII.pdf",
+        "md": "CSED226/3. pandasII.md",
+        "has_notes": true
       },
       {
         "stem": "4. kNN",
