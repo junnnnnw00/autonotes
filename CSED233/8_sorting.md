@@ -2115,7 +2115,7 @@ FUNCTION PartitionWithAuxiliaryArray(A, start, end):
 *   `middle_element` $= A[\text{mid}]$ (여기서 $\text{mid} = (\text{low} + \text{high}) / 2$)
 *   `last_element` $= A[\text{high}]$
 
-이 세 값 `$first_element`, `$middle_element`, `$last_element` 중 중간 크기의 값을 찾아 해당 위치의 원소를 피벗으로 사용합니다. 이는 일반적으로 세 값 중 두 개를 정렬하고, 남은 하나와 비교하여 중간 값을 찾는 방식으로 구현됩니다.
+이 세 값 `first_element`, `middle_element`, `last_element` 중 중간 크기의 값을 찾아 해당 위치의 원소를 피벗으로 사용합니다. 이는 일반적으로 세 값 중 두 개를 정렬하고, 남은 하나와 비교하여 중간 값을 찾는 방식으로 구현됩니다.
 
 예를 들어, 세 값 $x, y, z$의 중앙값을 찾는 간단한 로직은 다음과 같습니다:
 

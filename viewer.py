@@ -197,8 +197,33 @@ HTML = r"""<!DOCTYPE html>
     cursor: col-resize;
     flex-shrink: 0;
     transition: background 0.16s ease;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .divider::after {
+    content: '';
+    position: absolute;
+    width: 3px;
+    height: 22px;
+    background: repeating-linear-gradient(
+      180deg,
+      rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 2px,
+      transparent 2px, transparent 5px
+    );
+    border-radius: 2px;
+    pointer-events: none;
+    transition: background 0.16s ease;
   }
   .divider:hover, .divider.dragging { background: #007acc; }
+  .divider:hover::after, .divider.dragging::after {
+    background: repeating-linear-gradient(
+      180deg,
+      rgba(255,255,255,0.75) 0, rgba(255,255,255,0.75) 2px,
+      transparent 2px, transparent 5px
+    );
+  }
 
   #notes-pane {
     flex: 1;
@@ -481,6 +506,52 @@ HTML = r"""<!DOCTYPE html>
     font-size: 1.03em;
   }
 
+  /* Display math blocks (rendered by renderMathBlock) */
+  .markdown-body .math-block {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.55em 1.1em;
+    margin: 1em 0;
+    background: rgba(86, 156, 214, 0.05);
+    border-left: 2px solid rgba(86, 156, 214, 0.28);
+    border-radius: 0 8px 8px 0;
+  }
+
+  /* Slide N headings */
+  .markdown-body h2.slide-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.55em;
+    margin-top: 2.4em;
+  }
+  .markdown-body h2.slide-heading .slide-chip {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(86, 156, 214, 0.12);
+    color: var(--accent);
+    border: 1px solid rgba(86, 156, 214, 0.22);
+    border-radius: 6px;
+    padding: 0.05em 0.55em;
+    font-size: 0.78em;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  #notes-zoom-label { cursor: pointer; user-select: none; border-radius: 4px; transition: background 0.12s; }
+  #notes-zoom-label:hover { background: rgba(255,255,255,0.07); }
+
+  /* Reading progress bar */
+  #notes-progress {
+    height: 2px;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    flex-shrink: 0;
+    transition: width 0.08s linear;
+    pointer-events: none;
+  }
+
   #placeholder {
     flex: 1;
     display: flex;
@@ -491,6 +562,23 @@ HTML = r"""<!DOCTYPE html>
     text-align: center;
     padding: 24px;
   }
+  .placeholder-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .placeholder-icon {
+    width: 52px; height: 52px;
+    border: 2px solid #3a3a3a;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    color: #444;
+    margin-bottom: 4px;
+  }
+  .placeholder-title { color: #666; font-size: 14px; font-weight: 500; }
+  .placeholder-sub { color: #444; font-size: 12px; }
 
   .empty-note {
     padding: 20px;
@@ -561,15 +649,32 @@ HTML = r"""<!DOCTYPE html>
   /* TOC overlay (right-edge hover) */
   #toc-trigger-strip {
     position: absolute;
-    top: 0; right: 0;
-    width: 10px; height: 100%;
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 56px;
     z-index: 50;
     cursor: pointer;
-    background: linear-gradient(to left, rgba(86, 156, 214, 0.14), transparent);
+    background: var(--panel-3);
+    border: 1px solid var(--border);
+    border-right: none;
+    border-radius: 8px 0 0 8px;
     opacity: 0;
-    transition: opacity 0.25s;
+    transition: opacity 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #toc-trigger-strip::after {
+    content: '‹';
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1;
+    pointer-events: none;
   }
   #notes-pane:hover #toc-trigger-strip { opacity: 1; }
+  #toc-sidebar.visible ~ #toc-trigger-strip { opacity: 0 !important; }
 
   #toc-sidebar {
     position: absolute;
@@ -579,15 +684,17 @@ HTML = r"""<!DOCTYPE html>
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
     border-left: 1px solid rgba(86, 156, 214, 0.18);
-    box-shadow: -6px 0 28px rgba(0, 0, 0, 0.45);
     transform: translateX(100%);
-    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease;
     z-index: 45;
     display: flex;
     flex-direction: column;
     overflow: hidden;
   }
-  #toc-sidebar.visible { transform: translateX(0); }
+  #toc-sidebar.visible {
+    transform: translateX(0);
+    box-shadow: -6px 0 28px rgba(0, 0, 0, 0.45);
+  }
 
   .toc-hd {
     padding: 12px 14px;
@@ -685,7 +792,13 @@ HTML = r"""<!DOCTYPE html>
     <div id="file-list">불러오는 중...</div>
   </div>
   <div class="panes" id="panes">
-    <div id="placeholder">← 왼쪽에서 파일을 선택하세요</div>
+    <div id="placeholder">
+      <div class="placeholder-inner">
+        <div class="placeholder-icon">◫</div>
+        <div class="placeholder-title">파일을 선택하세요</div>
+        <div class="placeholder-sub">← 왼쪽 사이드바에서 강의 자료를 선택하면<br>PDF와 노트를 함께 볼 수 있습니다</div>
+      </div>
+    </div>
   </div>
 </div>
 <button id="back-to-top" title="맨 위로">↑</button>
@@ -1086,6 +1199,21 @@ function buildToc(root) {
 function enhanceRenderedNotes(root) {
   buildToc(root);
 
+  // Style "Slide N" headings with a chip badge
+  root.querySelectorAll('.markdown-body h2').forEach(h => {
+    const m = h.textContent.trim().match(/^(Slide\s+\d+)(.*)/i);
+    if (m) {
+      h.classList.add('slide-heading');
+      const chip = document.createElement('span');
+      chip.className = 'slide-chip';
+      chip.textContent = m[1];
+      const rest = m[2].trim();
+      h.textContent = '';
+      h.appendChild(chip);
+      if (rest) h.appendChild(document.createTextNode('\u00a0' + rest));
+    }
+  });
+
   root.querySelectorAll('a[href]').forEach(link => {
     const href = link.getAttribute('href') || '';
     if (/^https?:\/\//i.test(href)) {
@@ -1168,8 +1296,6 @@ async function loadFiles() {
     return;
   }
 
-  const savedPdf = localStorage.getItem('autonotes_last');
-  let autoOpen = null;
   noNotesCount = 0;
 
   for (const group of groups) {
@@ -1190,13 +1316,11 @@ async function loadFiles() {
       if (!f.has_notes && hideNoNotes) item.style.display = 'none';
       item.addEventListener('click', () => openFile(f, item));
       g.appendChild(item);
-      if (savedPdf && f.pdf === savedPdf) autoOpen = { f, item };
     }
     list.appendChild(g);
   }
 
   updateFilterBadge();
-  if (autoOpen) openFile(autoOpen.f, autoOpen.item);
 }
 
 function toggleHideNoNotes() {
@@ -1234,7 +1358,6 @@ async function openFile(f, item) {
   item.classList.add('active');
   currentItem = item;
   currentFile = f;
-  localStorage.setItem('autonotes_last', f.pdf);
 
   const panes = document.getElementById('panes');
   const placeholder = document.getElementById('placeholder');
@@ -1276,24 +1399,33 @@ async function openFile(f, item) {
         <span id="notes-toolbar-filename"></span>
         <div class="toolbar-actions">
           <button class="refresh-btn" id="notes-zoom-out" title="노트 축소">−</button>
-          <span id="notes-zoom-label" style="font-size:11px;color:var(--muted-2);min-width:34px;text-align:center">${Math.round((notesZoom/15)*100)}%</span>
+          <span id="notes-zoom-label" style="font-size:11px;color:var(--muted-2);min-width:34px;text-align:center" title="클릭하여 100% 초기화">${Math.round((notesZoom/15)*100)}%</span>
           <button class="refresh-btn" id="notes-zoom-in" title="노트 확대">+</button>
           <button class="refresh-btn sync-btn${pdfSyncEnabled ? ' active' : ''}" title="${pdfSyncEnabled ? 'PDF↔노트 동기화 켜짐' : 'PDF↔노트 동기화 꺼짐'}">⇄</button>
           <button class="refresh-btn theme-btn" title="라이트/다크 + PDF 다크모드 전환">${notesLight ? '☾' : '☀'}</button>
-          <button class="refresh-btn notes-print-btn" title="PDF로 인쇄/저장">⎙</button>
+          <button class="refresh-btn notes-print-btn" title="인쇄/저장 (P)">⎙</button>
         </div>
       </div>
+      <div id="notes-progress"></div>
       <div id="notes-scroll"></div>
-      <div id="toc-trigger-strip"></div>
       <div id="toc-sidebar">
         <div class="toc-hd">목차</div>
         <div id="toc-list-container"></div>
       </div>
+      <div id="toc-trigger-strip"></div>
     `;
 
     // Toolbar button listeners (set up once)
     notesPaneEl.querySelector('#notes-zoom-out').addEventListener('click', () => changeNotesZoom(-1));
     notesPaneEl.querySelector('#notes-zoom-in').addEventListener('click', () => changeNotesZoom(+1));
+    notesPaneEl.querySelector('#notes-zoom-label').addEventListener('click', () => {
+      notesZoom = 15;
+      localStorage.setItem('autonotes_zoom', '15');
+      const body = document.querySelector('.markdown-body');
+      if (body) body.style.fontSize = '';
+      const label = document.getElementById('notes-zoom-label');
+      if (label) label.textContent = '100%';
+    });
     notesPaneEl.querySelector('.sync-btn').addEventListener('click', toggleSync);
     notesPaneEl.querySelector('.theme-btn').addEventListener('click', toggleTheme);
     notesPaneEl.querySelector('.notes-print-btn').addEventListener('click', printNotes);
@@ -1309,11 +1441,16 @@ async function openFile(f, item) {
     tocEl.addEventListener('mouseenter', showToc);
     tocEl.addEventListener('mouseleave', hideToc);
 
-    // Back to top
+    // Back to top + reading progress bar
     const scrollEl = notesPaneEl.querySelector('#notes-scroll');
+    const progressEl = notesPaneEl.querySelector('#notes-progress');
     const backBtn = document.getElementById('back-to-top');
     scrollEl.addEventListener('scroll', () => {
       backBtn.classList.toggle('visible', scrollEl.scrollTop > 300);
+      if (progressEl) {
+        const max = scrollEl.scrollHeight - scrollEl.clientHeight;
+        progressEl.style.width = max > 0 ? (scrollEl.scrollTop / max * 100) + '%' : '0%';
+      }
     });
     backBtn.addEventListener('click', () => {
       scrollEl.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1392,6 +1529,49 @@ function setupDivider(divider, iframe, notesPane) {
     iframe.style.pointerEvents = '';
   });
 }
+
+function navigateSlide(dir) {
+  const scrollEl = document.getElementById('notes-scroll');
+  if (!scrollEl || currentHeadings.length === 0) return;
+  const slides = currentHeadings.filter(h => /^Slide\s+\d+/i.test(h.textContent.trim()));
+  if (slides.length === 0) return;
+  const containerTop = scrollEl.getBoundingClientRect().top;
+  let activeIdx = -1;
+  for (let i = 0; i < slides.length; i++) {
+    if (slides[i].getBoundingClientRect().top - containerTop <= 60) activeIdx = i;
+    else break;
+  }
+  const targetIdx = Math.max(0, Math.min(slides.length - 1, activeIdx + dir));
+  const target = slides[targetIdx];
+  if (target) {
+    const paneTop = scrollEl.getBoundingClientRect().top;
+    scrollEl.scrollBy({ top: target.getBoundingClientRect().top - paneTop - 12, behavior: 'smooth' });
+    const numMatch = target.textContent.trim().match(/^Slide\s+(\d+)/i);
+    if (numMatch && pdfSyncEnabled) {
+      const iframe = document.getElementById('pdf-frame');
+      if (iframe) {
+        pdfSyncSuppressUntil = Date.now() + 2500;
+        iframe.contentWindow.postMessage({ type: 'gotopage', page: parseInt(numMatch[1]) }, '*');
+      }
+    }
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+  const mod = e.ctrlKey || e.metaKey;
+  if (e.key === '[' && !mod) { e.preventDefault(); navigateSlide(-1); }
+  else if (e.key === ']' && !mod) { e.preventDefault(); navigateSlide(+1); }
+  else if ((e.key === 'ArrowLeft') && mod && !e.shiftKey) { e.preventDefault(); navigateSlide(-1); }
+  else if ((e.key === 'ArrowRight') && mod && !e.shiftKey) { e.preventDefault(); navigateSlide(+1); }
+  else if (e.key === 't' && !mod && !e.shiftKey) {
+    e.preventDefault();
+    const toc = document.getElementById('toc-sidebar');
+    if (toc) toc.classList.toggle('visible');
+  }
+  else if (e.key === 'p' && !mod) { e.preventDefault(); printNotes(); }
+  else if ((e.key === '\\') && mod) { e.preventDefault(); toggleSidebar(); }
+});
 
 loadFiles();
 applyTheme();

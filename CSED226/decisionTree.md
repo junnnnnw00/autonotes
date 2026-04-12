@@ -1165,7 +1165,7 @@ print(f"정보 획득 (Information Gain): {IG:.4f} (불확실성 감소량)")
 
 **코드/수식 해설**
 
-```
+```python
 BuildTree(dataset D, depth d):
   if Pure(D) or d >= max_depth or |D| < min_leaf:
     return Leaf( majority_class(D), dist=class_freqs(D) )
