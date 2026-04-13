@@ -102,6 +102,12 @@
         "pdf": "CSED233/10_AVL_tree.pdf",
         "md": "CSED233/10_AVL_tree.md",
         "has_notes": true
+      },
+      {
+        "stem": "25기출",
+        "pdf": "CSED233/25기출.pdf",
+        "md": "CSED233/25기출.md",
+        "has_notes": true
       }
     ]
   }
